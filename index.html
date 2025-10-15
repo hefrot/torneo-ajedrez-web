@@ -1,23 +1,93 @@
-<!DOCTYPE html>
-<html lang="es">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Torneo de Ajedrez - Lista de Jugadores</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+  <meta charset="utf-8" />
+  <title>Torneo Round Robin — Calendario Oficial</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style-public.css" />
 </head>
 <body>
-    <div class="container">
-        <h1>Enfrentamientos del Torneo</h1>
-        <div id="fixtures-container">
-            <p>Cargando jugadores...</p>
-        </div>
-    </div>
+  <div class="container">
+    <header>
+      <h1>♟️ Torneo Round Robin — Calendario Oficial</h1>
+      <p>Consulta con quién juegas cada ronda</p>
+      <div class="select-row">
+        <select id="ronda-select"></select>
+        <button id="refresh">🔄 Actualizar</button>
+      </div>
+    </header>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script src="firebase-config.js"></script>
-    <script src="app.js"></script>
+    <section id="matches" class="cards"></section>
+
+    <footer>
+      <p>Powered by H. Mena • Firebase + GitHub Pages</p>
+    </footer>
+  </div>
+
+  <script type="module">
+    import { firebaseConfig } from './firebase-config.js';
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const dbRef = ref(db);
+
+    const rondaSelect = document.getElementById('ronda-select');
+    const matchesDiv = document.getElementById('matches');
+    const refreshBtn = document.getElementById('refresh');
+
+    let calendario = {};
+
+    async function cargarCalendario() {
+      matchesDiv.innerHTML = '<p class="loading">Cargando calendario...</p>';
+      try {
+        const snap = await get(child(dbRef, 'calendario'));
+        if (!snap.exists()) {
+          matchesDiv.innerHTML = '<p>No hay calendario cargado todavía.</p>';
+          return;
+        }
+        calendario = snap.val();
+        renderSelect();
+        renderRonda(Object.keys(calendario)[0]);
+      } catch (err) {
+        matchesDiv.innerHTML = '<p>Error al cargar calendario: ' + err + '</p>';
+      }
+    }
+
+    function renderSelect() {
+      rondaSelect.innerHTML = '';
+      Object.keys(calendario).forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r;
+        opt.textContent = r.replace('ronda','Ronda ');
+        rondaSelect.appendChild(opt);
+      });
+    }
+
+    function renderRonda(rondaKey) {
+      const ronda = calendario[rondaKey];
+      matchesDiv.innerHTML = '';
+      ronda.forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="names">
+            <span class="white">${m.p1_name}</span>
+            <span class="vs">vs</span>
+            <span class="black">${m.p2_name}</span>
+          </div>
+          <div class="details">${m.bye ? 'BYE / Descansa' : '3 partidas (10min, 5min, 3min)'}</div>
+        `;
+        matchesDiv.appendChild(card);
+      });
+    }
+
+    rondaSelect.addEventListener('change', e => renderRonda(e.target.value));
+    refreshBtn.addEventListener('click', cargarCalendario);
+
+    cargarCalendario();
+  </script>
 </body>
 </html>
