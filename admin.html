@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin - Torneo</title>
+</head>
+<body>
+    <h1>Panel de Administración</h1>
+    
+    <h2>Importar Jugadores (CSV)</h2>
+    <textarea id="csv-data" rows="10" cols="50" placeholder="Pega aquí el CSV: Nombre,ELO,Club"></textarea>
+    <br>
+    <button id="import-button">Importar Jugadores</button>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <script src="firebase-config.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
