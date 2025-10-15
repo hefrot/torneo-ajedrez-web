@@ -16,6 +16,7 @@ playersRef.on('value', (snapshot) => {
         const ul = document.createElement('ul');
         playersList.forEach(player => {
             const li = document.createElement('li');
+            // LA LÍNEA CORREGIDA ESTÁ AQUÍ
             li.textContent = ${player.name} (ELO: ) - Lichess: ;
             ul.appendChild(li);
         });
