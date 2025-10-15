@@ -1,9 +1,7 @@
-// app.js (página pública) - Firebase v9 modular
+// app.js (página pública) - Lee /jugadores y /pairings — Firebase v9 modular
 (async function(){
-  const { getDatabase, ref, onValue } = await import("https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js");
-
-  const $  = (s)=> document.querySelector(s);
-  const $$ = (s)=> Array.from(document.querySelectorAll(s));
+  const { getDatabase, ref, onValue } =
+    await import("https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js");
 
   const waLink = (raw) => {
     if(!raw) return null;
@@ -11,7 +9,9 @@
     return num.startsWith('+') ? `https://wa.me/${num.replace('+','')}` : null;
   };
 
-  const pts = (p)=> ((p.wins||0)*3 + (p.draws||0));
+  const pts = (p)=> ((p.wins||0)*3 + (p.draws||0)); // 3/1/0
+  const esc = (s)=> String(s||'').replace(/[&<>\"']/g,
+    c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
   function sortPlayers(arr){
     return arr.slice().sort((a,b)=>{
@@ -23,13 +23,26 @@
     });
   }
 
-  const esc = (s)=> String(s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[c]));
+  function mapJugadorToPlayer([id,p]){
+    return {
+      id,
+      name: p.nombre || p.name || p.nombreCompleto || ("Jugador " + String(id).slice(-4)),
+      rating: Number(p.eloActual ?? p.elo ?? 1000),   // <— aquí el fallback
+      whatsapp: p.whatsapp || p.telefono || null,
+      wins: Number(p.wins ?? 0),
+      draws: Number(p.draws ?? 0),
+      losses: Number(p.losses ?? 0),
+      games: Number(p.games ?? 0)
+    };
+  }
 
-  function renderPlayers(players){
+  function renderPlayers(playersObj){
     const grid = document.getElementById('playersGrid');
+    const statPlayers = document.getElementById('statPlayers');
     if(!grid) return;
     grid.innerHTML = '';
-    const list = Object.entries(players||{}).map(([id,p])=>({id,...p}));
+    const list = Object.entries(playersObj||{}).map(mapJugadorToPlayer);
+    statPlayers && (statPlayers.textContent = list.length);
     const sorted = sortPlayers(list);
     sorted.forEach((p,i)=>{
       const top = (i===0?'gold': i===1?'silver': i===2?'bronze':'');
@@ -103,36 +116,34 @@
   }
   const db = getDatabase(app);
 
-  const statPlayers = document.getElementById('statPlayers');
   const statRound   = document.getElementById('statRound');
   const statGames   = document.getElementById('statGames');
   const roundTitle  = document.getElementById('roundTitle');
 
   let currentRound = 1;
-  let players = {};
   let pairings = {};
 
   onValue(ref(db,'tournament'), snap=>{
     const t = snap.val()||{};
     currentRound = t.currentRound || 1;
-    if(statRound)  statRound.textContent  = currentRound;
-    if(roundTitle) roundTitle.textContent = currentRound;
+    statRound && (statRound.textContent  = currentRound);
+    roundTitle && (roundTitle.textContent = currentRound);
     if(pairings) {
       const list = Object.values(pairings||{}).filter(p=>p.round===currentRound);
       renderPairings(list);
     }
   });
 
-  onValue(ref(db,'players'), snap=>{
-    players = snap.val()||{};
-    if(statPlayers) statPlayers.textContent = Object.keys(players).length;
-    renderPlayers(players);
+  // Lee /jugadores (no /players)
+  onValue(ref(db,'jugadores'), snap=>{
+    const jugadores = snap.val()||{};
+    renderPlayers(jugadores);
   });
 
   onValue(ref(db,'pairings'), snap=>{
     pairings = snap.val()||{};
     const all = Object.values(pairings||{});
-    if(statGames) statGames.textContent = all.length;
+    statGames && (statGames.textContent = all.length);
     const list = all.filter(p=>p.round===currentRound);
     renderPairings(list);
   });
