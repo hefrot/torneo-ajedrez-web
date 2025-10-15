@@ -1,31 +1,31 @@
-/* style.css */
+/* style.css - Rediseño Moderno Dark Mode */
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
 body {
     font-family: 'Roboto', sans-serif;
-    background-color: #f4f4f9;
-    color: #333;
+    background-color: #1a1a2e; /* Fondo oscuro azulado */
+    color: #e0e0e0; /* Texto claro */
     margin: 0;
     padding: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
 }
 
 .container {
     max-width: 800px;
     width: 100%;
-    background-color: #fff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin: 20px auto;
+    background-color: #1e1e3f; /* Contenedor un poco más claro */
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    border: 1px solid #3a3a5a;
 }
 
 h1, h2 {
     text-align: center;
-    color: #2c3e50;
-    margin-bottom: 20px;
+    color: #ffffff;
+    margin-bottom: 25px;
+    border-bottom: 2px solid #28a745; /* Línea de acento verde */
+    padding-bottom: 10px;
 }
 
 ul {
@@ -34,17 +34,46 @@ ul {
 }
 
 li {
-    background-color: #e9ecef;
+    background-color: #2a2a4a; /* Fondo de los elementos de la lista */
     margin: 10px 0;
-    padding: 15px;
-    border-radius: 5px;
-    font-size: 16px;
+    padding: 15px 20px;
+    border-radius: 8px;
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    border-left: 5px solid #007bff; /* Borde de acento azul */
 }
 
+li:hover {
+    transform: scale(1.02);
+    background-color: #3a3a5a;
+}
+
+/* Estilo para los íconos */
+li i {
+    margin-right: 15px;
+    color: #28a745; /* Íconos en verde */
+    width: 20px;
+    text-align: center;
+}
+
+a {
+    color: #58a6ff; /* Color para enlaces */
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+
+
+/* Estilos para el panel de admin */
 textarea {
     width: 95%;
-    padding: 10px;
-    border: 1px solid #ced4da;
+    padding: 15px;
+    border: 1px solid #3a3a5a;
+    background-color: #2a2a4a;
+    color: #e0e0e0;
     border-radius: 5px;
     font-size: 14px;
     margin-bottom: 15px;
@@ -52,27 +81,24 @@ textarea {
 }
 
 button {
-    background-color: #007bff;
+    background-color: #28a745; /* Botón verde */
     color: #fff;
     border: none;
-    padding: 10px 20px;
+    padding: 12px 25px;
     font-size: 16px;
+    font-weight: bold;
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    width: 100%;
 }
 
 button:hover {
-    background-color: #0056b3;
+    background-color: #218838;
 }
 
 #status-message {
     margin-top: 15px;
     font-weight: bold;
-    color: #28a745;
-}
-
-p {
     text-align: center;
-    font-size: 16px;
 }
