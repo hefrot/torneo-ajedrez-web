@@ -1,104 +1,176 @@
-/* style.css - Rediseño Moderno Dark Mode */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+/* style.css - Rediseño Profesional */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap');
+
+:root {
+    --bg-color: #0a0e1a;
+    --card-bg: #161b2e;
+    --accent-color: #00d9ff;
+    --text-color: #e6f1ff;
+    --subtle-text: #8b949e;
+    --border-color: #30363d;
+}
 
 body {
-    font-family: 'Roboto', sans-serif;
-    background-color: #1a1a2e; /* Fondo oscuro azulado */
-    color: #e0e0e0; /* Texto claro */
+    font-family: 'Open Sans', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     margin: 0;
     padding: 20px;
 }
 
-.container {
-    max-width: 800px;
-    width: 100%;
-    margin: 20px auto;
-    background-color: #1e1e3f; /* Contenedor un poco más claro */
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-    border: 1px solid #3a3a5a;
-}
-
-h1, h2 {
+.header {
     text-align: center;
-    color: #ffffff;
-    margin-bottom: 25px;
-    border-bottom: 2px solid #28a745; /* Línea de acento verde */
-    padding-bottom: 10px;
+    margin-bottom: 40px;
 }
 
-ul {
-    list-style-type: none;
-    padding: 0;
+.header h1 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 2.5em;
+    color: #fff;
+    text-shadow: 0 0 10px var(--accent-color);
 }
 
-li {
-    background-color: #2a2a4a; /* Fondo de los elementos de la lista */
-    margin: 10px 0;
-    padding: 15px 20px;
-    border-radius: 8px;
+.stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 10px;
+}
+
+.stat {
     font-size: 1.1em;
+    color: var(--subtle-text);
+}
+
+.stat strong {
+    color: var(--text-color);
+}
+
+.container {
+    max-width: 900px;
+    margin: auto;
+}
+
+h2 {
+    font-family: 'Montserrat', sans-serif;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-top: 40px;
+    color: var(--accent-color);
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+.player-card, .pairing-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
     display: flex;
     align-items: center;
-    transition: transform 0.2s ease, background-color 0.2s ease;
-    border-left: 5px solid #007bff; /* Borde de acento azul */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeIn 0.5s forwards;
 }
 
-li:hover {
-    transform: scale(1.02);
-    background-color: #3a3a5a;
+.player-card:hover, .pairing-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0 15px var(--accent-color);
 }
 
-/* Estilo para los íconos */
-li i {
-    margin-right: 15px;
-    color: #28a745; /* Íconos en verde */
-    width: 20px;
-    text-align: center;
+.player-rank {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--accent-color);
+    margin-right: 20px;
+    width: 30px;
 }
 
-a {
-    color: #58a6ff; /* Color para enlaces */
-    text-decoration: none;
-}
-a:hover {
-    text-decoration: underline;
+.player-info {
+    flex-grow: 1;
 }
 
+.player-info h3 {
+    margin: 0 0 5px 0;
+    font-size: 1.2em;
+    color: var(--text-color);
+}
 
-/* Estilos para el panel de admin */
-textarea {
-    width: 95%;
-    padding: 15px;
-    border: 1px solid #3a3a5a;
-    background-color: #2a2a4a;
-    color: #e0e0e0;
+.player-meta {
+    display: flex;
+    gap: 20px;
+    color: var(--subtle-text);
+}
+
+.player-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.whatsapp-btn {
+    background: none;
+    border: 1px solid #25D366;
+    color: #25D366;
+    padding: 8px 12px;
     border-radius: 5px;
-    font-size: 14px;
-    margin-bottom: 15px;
-    resize: vertical;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.whatsapp-btn:hover {
+    background-color: #25D366;
+    color: #fff;
+}
+
+.pairing-card .vs {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.5em;
+    color: var(--accent-color);
+    margin: 0 20px;
+}
+
+/* Estilos para Admin */
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+input {
+    background-color: #1c213a;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 12px;
+    border-radius: 5px;
+    font-size: 1em;
 }
 
 button {
-    background-color: #28a745; /* Botón verde */
-    color: #fff;
+    background: linear-gradient(90deg, #00d9ff, #007bff);
     border: none;
-    padding: 12px 25px;
-    font-size: 16px;
-    font-weight: bold;
+    color: #fff;
+    padding: 12px;
     border-radius: 5px;
+    font-size: 1.1em;
+    font-weight: bold;
     cursor: pointer;
-    transition: background-color 0.3s ease;
-    width: 100%;
+    transition: transform 0.2s;
 }
 
 button:hover {
-    background-color: #218838;
+    transform: scale(1.05);
 }
 
-#status-message {
-    margin-top: 15px;
-    font-weight: bold;
-    text-align: center;
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
+
