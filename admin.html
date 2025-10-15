@@ -1,262 +1,260 @@
 <!doctype html>
-<html>
+<html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Admin — Generador Calendario (Round Robin)</title>
+  <title>Admin — Calendario y Publicación</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
+  <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div class="container">
-    <header>
-      <div class="header-left">
-        <h1>H. Mena — Generador de Calendario</h1>
-        <p>Round Robin fijo — todos contra todos (3 juegos por enfrentamiento)</p>
-      </div>
-      <div class="controls">
-        <button id="btn-generate">📅 Generar calendario (vista previa)</button>
-        <button id="btn-save" class="ghost" disabled>💾 Guardar en Firebase</button>
-        <div class="note">Usa /jugadores como fuente</div>
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo"></div>
+        <div class="title">
+          <div class="badge">Panel</div>
+          <h1 class="title">Administrador del Torneo</h1>
+        </div>
+        <div class="header-stats" style="margin-left:auto">
+          <div class="pill"><i class="fa-solid fa-user-group"></i> <span>Jugadores:</span> <strong id="meta-count">—</strong></div>
+          <div class="pill"><i class="fa-solid fa-layer-group"></i> <span>Ronda:</span> <strong id="statRound">1</strong></div>
+        </div>
       </div>
     </header>
 
-    <div class="grid">
-      <aside class="panel">
-        <h3>Resumen</h3>
-        <div class="meta">
-          <div><span>Total jugadores</span><span id="meta-count">—</span></div>
-          <div><span>Rondas calculadas</span><span id="meta-rounds">—</span></div>
-          <div><span>Partidos por ronda</span><span id="meta-matches">—</span></div>
-          <div><span>Guardar</span><span>Se crea nodo <code>/calendario</code></span></div>
-        </div>
-
-        <hr style="border:0;border-top:1px solid rgba(255,255,255,0.03);margin:10px 0">
-
-        <div style="display:flex;gap:8px;flex-direction:column">
-          <label class="small">Sembrar por ELO (orden inicial):</label>
+    <section class="section">
+      <h2>Generador de Calendario (Round Robin)</h2>
+      <div class="actions" style="margin-bottom:10px">
+        <button id="btn-generate" class="btn primary">📅 Generar calendario (vista previa)</button>
+        <button id="btn-save" class="btn ghost" disabled>💾 Guardar en Firebase</button>
+        <button id="btn-preview-sample" class="btn">👀 Ver 2 rondas</button>
+        <button id="btn-clear" class="btn">🧹 Limpiar vista</button>
+        <button id="btn-publish" class="btn">🚀 Publicar ronda actual</button>
+      </div>
+      <div class="grid" style="grid-template-columns:280px 1fr">
+        <aside class="panel" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px">
+          <h3>Resumen</h3>
+          <div class="meta">
+            <div><span>Total jugadores</span><span id="meta-count-side">—</span></div>
+            <div><span>Rondas calculadas</span><span id="meta-rounds">—</span></div>
+            <div><span>Partidos por ronda</span><span id="meta-matches">—</span></div>
+            <div><span>Guardar</span><span>Se crea nodo <code>/calendario</code></span></div>
+          </div>
+          <hr style="border:0;border-top:1px solid rgba(255,255,255,0.06);margin:10px 0">
+          <label class="small">Sembrar por:</label>
           <select id="seed-mode" class="input small">
             <option value="elo">ELO descendente (recomendado)</option>
             <option value="alpha">Alfabético</option>
-            <option value="raw">Orden cargado en Firebase</option>
+            <option value="raw">Orden en Firebase</option>
           </select>
-
-          <label class="small" style="margin-top:8px">Alternar BYE como jugador</label>
-          <div style="display:flex;gap:8px">
-            <button id="btn-preview-sample" class="ghost">Ver primeras 2 rondas</button>
-            <button id="btn-clear" class="ghost">Limpiar vista</button>
-          </div>
-        </div>
-
-        <p class="footer-note">IMPORTANTE: revisa la vista previa antes de guardar. Una vez guardado, el calendario se considera fijo.</p>
-      </aside>
-
-      <main>
-        <div id="preview" class="cards"></div>
-      </main>
-    </div>
+          <p class="footer-note" style="margin-top:12px">Revisa la vista previa antes de guardar. Una vez guardado, el calendario es fijo.</p>
+        </aside>
+        <main>
+          <div id="preview" class="cards"></div>
+        </main>
+      </div>
+    </section>
   </div>
 
-  <!-- firebase-config.js debe exportar: export const firebaseConfig = { ... } -->
   <script type="module">
     import { firebaseConfig } from './firebase-config.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-    import { getDatabase, ref, set, onValue, get, child } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+    import { getDatabase, ref, set, onValue, get, update, push } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
     const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    const db  = getDatabase(app);
 
-    // UI elements
+    // UI
     const BTN_GENERATE = document.getElementById('btn-generate');
     const BTN_SAVE = document.getElementById('btn-save');
+    const BTN_PREVIEW_SAMPLE = document.getElementById('btn-preview-sample');
+    const BTN_CLEAR = document.getElementById('btn-clear');
+    const BTN_PUBLISH = document.getElementById('btn-publish');
     const PREVIEW = document.getElementById('preview');
     const META_COUNT = document.getElementById('meta-count');
+    const META_COUNT_SIDE = document.getElementById('meta-count-side');
     const META_ROUNDS = document.getElementById('meta-rounds');
     const META_MATCHES = document.getElementById('meta-matches');
     const SEED_MODE = document.getElementById('seed-mode');
-    const BTN_PREVIEW_SAMPLE = document.getElementById('btn-preview-sample');
-    const BTN_CLEAR = document.getElementById('btn-clear');
+    const STAT_ROUND = document.getElementById('statRound');
 
-    let playersObj = {};   // raw players from /jugadores
-    let playersList = [];  // array of {id,name,elo}
-    let calendar = null;   // generated calendar object
+    let playersObj = {};
+    let playersList = [];
+    let calendar = null;
 
-    // load players from /jugadores once and keep local copy
-    const jugadoresRef = ref(db, 'jugadores');
-    onValue(jugadoresRef, snap => {
+    // Lee jugadores desde /jugadores
+    onValue(ref(db, 'jugadores'), snap => {
       playersObj = snap.val() || {};
       buildPlayersArray();
       updateMeta();
     });
 
+    // Lee ronda actual (opcional)
+    onValue(ref(db, 'tournament'), snap => {
+      const t = snap.val() || {};
+      STAT_ROUND.textContent = t.currentRound || 1;
+    });
+
     function buildPlayersArray(){
       playersList = [];
       for(const id of Object.keys(playersObj)){
-        const p = playersObj[id];
+        const p = playersObj[id] || {};
         playersList.push({
           id,
           name: p.nombre || p.name || p.nombreCompleto || ("Jugador " + id.slice(-4)),
-          elo: Number(p.eloActual ?? p.elo ?? 1000)
+          elo: Number(p.eloActual ?? p.elo ?? 1000),
+          whatsapp: p.whatsapp || p.telefono || null
         });
       }
     }
 
     function updateMeta(){
       META_COUNT.textContent = playersList.length;
-      // rounds = n if n is odd -> n, else n-1? For round-robin:
+      META_COUNT_SIDE.textContent = playersList.length;
       const n = playersList.length;
-      const rounds = (n % 2 === 0) ? n-1 : n; // e.g. 21 -> 21 rounds? classic uses n if odd -> n rounds (with bye)
+      const rounds = (n % 2 === 0) ? (n-1) : n;
       META_ROUNDS.textContent = rounds;
-      META_MATCHES.textContent = Math.floor(playersList.length/2);
+      META_MATCHES.textContent = Math.floor(n/2);
     }
 
-    // Round Robin generator (circle method). Expects array of player objects.
-    // returns array of rounds; each round is array of pair objects {p1:{id,name}, p2:{id,name}, bye:bool}
     function generateRoundRobin(arr, seedMode='elo'){
       if(!Array.isArray(arr) || arr.length === 0) return [];
-      // copy
       let players = arr.slice();
-
-      // seeding modes
       if(seedMode === 'elo'){
-        players.sort((a,b)=> (b.elo||0) - (a.elo||0));
-      } else if(seedMode === 'alpha'){
+        players.sort((a,b)=> (b.elo||0)-(a.elo||0));
+      }else if(seedMode === 'alpha'){
         players.sort((a,b)=> (''+a.name).localeCompare(b.name));
-      } // raw leaves order as loaded
-
-      // if odd, add BYE placeholder
-      let isOdd = players.length % 2 === 1;
-      const BYE = { id: null, name: 'BYE', elo: 0 };
-      if (isOdd) players.push(BYE);
+      }
+      const BYE = { id: null, name: 'BYE', elo: 0, whatsapp: null };
+      if(players.length % 2 === 1) players.push(BYE);
 
       const n = players.length;
       const rounds = [];
-      // create arr of ids for rotation method
       let arrRot = players.slice();
-      const fixed = arrRot[0];
 
-      for(let round = 0; round < n - 1; round++){
+      for(let round=0; round<n-1; round++){
         const pairs = [];
-        for(let i=0;i< n/2;i++){
+        for(let i=0; i<n/2; i++){
           const a = arrRot[i];
-          const b = arrRot[n - 1 - i];
-          if(a.id === null && b.id === null) continue;
-          // decide white/black: alternate to balance - odd rounds flip
-          const white = (i % 2 === 0) ? a : b;
-          const black = (i % 2 === 0) ? b : a;
+          const b = arrRot[n-1-i];
+          if(!a || !b || a.id===null || b.id===null) continue;
+          const whiteFirst = (round % 2 === 0);
+          const white = whiteFirst ? a : b;
+          const black = whiteFirst ? b : a;
           pairs.push({
-            p1_id: white.id,
-            p2_id: black.id,
-            p1_name: white.name,
-            p2_name: black.name,
-            bye: (white.id === null || black.id === null)
+            p1_id: white.id, p2_id: black.id,
+            p1_name: white.name, p2_name: black.name,
+            p1_whatsapp: white.whatsapp || null,
+            p2_whatsapp: black.whatsapp || null,
+            bye: false
           });
         }
         rounds.push(pairs);
-        // rotate (keep first fixed)
         arrRot = [arrRot[0], arrRot[arrRot.length-1], ...arrRot.slice(1, arrRot.length-1)];
       }
-
       return rounds;
     }
 
-    // render preview as cards
-    function renderPreview(rounds, limitRounds=0){
+    function renderPreview(rounds, limit=0){
       PREVIEW.innerHTML = '';
-      const totalRounds = rounds.length;
-      const roundsToShow = limitRounds > 0 ? Math.min(limitRounds, totalRounds) : totalRounds;
-      for(let r=0;r<roundsToShow;r++){
+      const total = rounds.length;
+      const show = limit>0 ? Math.min(limit,total) : total;
+      for(let r=0; r<show; r++){
         const card = document.createElement('div');
         card.className = 'round-card';
         const head = document.createElement('div');
         head.className = 'round-head';
         head.innerHTML = `<h4>Ronda ${r+1}</h4><div class="badge">${rounds[r].length} partidas</div>`;
         card.appendChild(head);
-
-        rounds[r].forEach(match => {
-          const m = document.createElement('div');
-          m.className = 'match';
-          const names = document.createElement('div');
-          names.className = 'names';
-          const p1 = document.createElement('span');
-          p1.textContent = match.p1_name + (match.bye ? ' (descansa)' : '');
-          const p2 = document.createElement('small');
-          p2.textContent = match.p2_name;
-          names.appendChild(p1);
-          names.appendChild(p2);
-
-          const right = document.createElement('div');
-          right.style.textAlign = 'right';
-          right.innerHTML = `<div style="font-size:12px;color:var(--muted)">${match.bye ? 'BYE' : 'vs'}</div>`;
-          m.appendChild(names);
-          m.appendChild(right);
-          card.appendChild(m);
+        rounds[r].forEach(m=>{
+          const row = document.createElement('div');
+          row.className = 'match';
+          row.innerHTML = `
+            <div class="names">
+              <span>${m.p1_name}</span>
+              <small>${m.p2_name}</small>
+            </div>
+            <div style="text-align:right"><div style="font-size:12px;color:var(--muted)">vs</div></div>
+          `;
+          card.appendChild(row);
         });
-
         PREVIEW.appendChild(card);
       }
     }
 
-    // generate & preview
     BTN_GENERATE.addEventListener('click', ()=>{
-      if(playersList.length === 0){
-        alert('No hay jugadores en /jugadores. Verifica Firebase.');
-        return;
-      }
-      const seed = SEED_MODE.value;
-      calendar = generateRoundRobin(playersList, seed);
+      if(playersList.length===0){ alert('No hay jugadores en /jugadores.'); return; }
+      calendar = generateRoundRobin(playersList, SEED_MODE.value);
       renderPreview(calendar);
       META_ROUNDS.textContent = calendar.length;
-      BTN_SAVE.disabled = false;
-      BTN_SAVE.classList.remove('ghost');
+      BTN_SAVE.disabled = false; BTN_SAVE.classList.remove('ghost');
       window.scrollTo({top:0,behavior:'smooth'});
     });
 
-    // sample preview (first 2 rounds)
     BTN_PREVIEW_SAMPLE.addEventListener('click', ()=>{
-      if(!calendar) {
-        if(playersList.length===0) return alert('No players loaded');
+      if(!calendar){
+        if(playersList.length===0) return alert('No hay jugadores.');
         calendar = generateRoundRobin(playersList, SEED_MODE.value);
       }
       renderPreview(calendar, 2);
     });
 
-    BTN_CLEAR.addEventListener('click', ()=> {
-      PREVIEW.innerHTML = '';
-      BTN_SAVE.disabled = true;
-      BTN_SAVE.classList.add('ghost');
+    BTN_CLEAR.addEventListener('click', ()=>{
+      PREVIEW.innerHTML='';
+      BTN_SAVE.disabled = true; BTN_SAVE.classList.add('ghost');
     });
 
-    // Save calendar to Firebase under /calendario (overwrite)
     BTN_SAVE.addEventListener('click', async ()=>{
       if(!calendar) return alert('Genera el calendario primero.');
-      if(!confirm('Guardar calendario en Firebase en /calendario ? (Esto sobrescribirá /calendario existente)')) return;
-      try {
-        const obj = {};
-        calendar.forEach((roundPairs, idx) => {
-          const key = `ronda${idx+1}`;
-          obj[key] = roundPairs.map(m => ({
-            p1_id: m.p1_id,
-            p2_id: m.p2_id,
-            p1_name: m.p1_name,
-            p2_name: m.p2_name,
-            bye: !!m.bye
-          }));
-        });
-        await set(ref(db, 'calendario'), obj);
-        alert('Calendario guardado en /calendario ✔️');
-        BTN_SAVE.disabled = true;
-        BTN_SAVE.classList.add('ghost');
-      } catch (e){
-        console.error(e);
-        alert('Error al guardar: ' + e.message);
-      }
+      if(!confirm('Guardar calendario en /calendario ? (Sobrescribe existente)')) return;
+      const obj = {};
+      calendar.forEach((roundPairs, idx)=>{
+        const key = `ronda${idx+1}`;
+        obj[key] = roundPairs.map(m=>({
+          p1_id: m.p1_id, p2_id: m.p2_id,
+          p1_name: m.p1_name, p2_name: m.p2_name,
+          p1_whatsapp: m.p1_whatsapp || null,
+          p2_whatsapp: m.p2_whatsapp || null,
+          bye: !!m.bye
+        }));
+      });
+      await set(ref(db,'calendario'), obj);
+      alert('Calendario guardado ✔️');
+      BTN_SAVE.disabled = true; BTN_SAVE.classList.add('ghost');
     });
 
-    // Helper: optional show players in console (dev)
-    window._debugPlayers = ()=> playersList;
-    window._debugCalendar = ()=> calendar;
+    // Publicar ronda actual: /calendario/rondaX -> /pairings
+    BTN_PUBLISH.addEventListener('click', async ()=>{
+      const tSnap = await get(ref(db,'tournament'));
+      const t = tSnap.val() || {};
+      const round = t.currentRound || 1;
 
+      const calSnap = await get(ref(db, `calendario/ronda${round}`));
+      const list = calSnap.val();
+      if(!list || !list.length) return alert(`No hay calendario para ronda ${round}`);
+
+      // limpia pairings previos de la ronda
+      const prev = (await get(ref(db,'pairings'))).val() || {};
+      const del = {};
+      for(const [k,v] of Object.entries(prev)){
+        if(v.round === round) del[`pairings/${k}`]=null;
+      }
+      if(Object.keys(del).length) await update(ref(db), del);
+
+      for(const m of list){
+        const key = push(ref(db,'pairings')).key;
+        await set(ref(db, `pairings/${key}`), {
+          white: m.p1_name, black: m.p2_name,
+          whiteWhatsapp: m.p1_whatsapp || null,
+          blackWhatsapp: m.p2_whatsapp || null,
+          round, date: null, result: 'pendiente', bo3: true
+        });
+      }
+      alert(`Pareos de la ronda ${round} publicados ✔️`);
+    });
   </script>
 </body>
 </html>
+
