@@ -1,24 +1,262 @@
-<!DOCTYPE html>
-<html lang="es">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Torneo de Ajedrez - Administración</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <title>Admin — Generador Calendario (Round Robin)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="container">
-        <h1>Panel de Administración</h1>
-        <p>Pega la lista de jugadores en formato CSV (Nombre,ELO,Lichess) sin encabezados:</p>
-        <textarea id="csv-input" rows="10" placeholder="Ejemplo: Juan Perez,1500,juanperez"></textarea>
-        <br>
-        <button id="upload-btn">Subir Jugadores a Firebase</button>
-        <div id="status-message"></div>
-    </div>
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <h1>H. Mena — Generador de Calendario</h1>
+        <p>Round Robin fijo — todos contra todos (3 juegos por enfrentamiento)</p>
+      </div>
+      <div class="controls">
+        <button id="btn-generate">📅 Generar calendario (vista previa)</button>
+        <button id="btn-save" class="ghost" disabled>💾 Guardar en Firebase</button>
+        <div class="note">Usa /jugadores como fuente</div>
+      </div>
+    </header>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script src="firebase-config.js"></script>
-    <script src="admin.js"></script>
+    <div class="grid">
+      <aside class="panel">
+        <h3>Resumen</h3>
+        <div class="meta">
+          <div><span>Total jugadores</span><span id="meta-count">—</span></div>
+          <div><span>Rondas calculadas</span><span id="meta-rounds">—</span></div>
+          <div><span>Partidos por ronda</span><span id="meta-matches">—</span></div>
+          <div><span>Guardar</span><span>Se crea nodo <code>/calendario</code></span></div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid rgba(255,255,255,0.03);margin:10px 0">
+
+        <div style="display:flex;gap:8px;flex-direction:column">
+          <label class="small">Sembrar por ELO (orden inicial):</label>
+          <select id="seed-mode" class="input small">
+            <option value="elo">ELO descendente (recomendado)</option>
+            <option value="alpha">Alfabético</option>
+            <option value="raw">Orden cargado en Firebase</option>
+          </select>
+
+          <label class="small" style="margin-top:8px">Alternar BYE como jugador</label>
+          <div style="display:flex;gap:8px">
+            <button id="btn-preview-sample" class="ghost">Ver primeras 2 rondas</button>
+            <button id="btn-clear" class="ghost">Limpiar vista</button>
+          </div>
+        </div>
+
+        <p class="footer-note">IMPORTANTE: revisa la vista previa antes de guardar. Una vez guardado, el calendario se considera fijo.</p>
+      </aside>
+
+      <main>
+        <div id="preview" class="cards"></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- firebase-config.js debe exportar: export const firebaseConfig = { ... } -->
+  <script type="module">
+    import { firebaseConfig } from './firebase-config.js';
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getDatabase, ref, set, onValue, get, child } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // UI elements
+    const BTN_GENERATE = document.getElementById('btn-generate');
+    const BTN_SAVE = document.getElementById('btn-save');
+    const PREVIEW = document.getElementById('preview');
+    const META_COUNT = document.getElementById('meta-count');
+    const META_ROUNDS = document.getElementById('meta-rounds');
+    const META_MATCHES = document.getElementById('meta-matches');
+    const SEED_MODE = document.getElementById('seed-mode');
+    const BTN_PREVIEW_SAMPLE = document.getElementById('btn-preview-sample');
+    const BTN_CLEAR = document.getElementById('btn-clear');
+
+    let playersObj = {};   // raw players from /jugadores
+    let playersList = [];  // array of {id,name,elo}
+    let calendar = null;   // generated calendar object
+
+    // load players from /jugadores once and keep local copy
+    const jugadoresRef = ref(db, 'jugadores');
+    onValue(jugadoresRef, snap => {
+      playersObj = snap.val() || {};
+      buildPlayersArray();
+      updateMeta();
+    });
+
+    function buildPlayersArray(){
+      playersList = [];
+      for(const id of Object.keys(playersObj)){
+        const p = playersObj[id];
+        playersList.push({
+          id,
+          name: p.nombre || p.name || p.nombreCompleto || ("Jugador " + id.slice(-4)),
+          elo: Number(p.eloActual ?? p.elo ?? 1000)
+        });
+      }
+    }
+
+    function updateMeta(){
+      META_COUNT.textContent = playersList.length;
+      // rounds = n if n is odd -> n, else n-1? For round-robin:
+      const n = playersList.length;
+      const rounds = (n % 2 === 0) ? n-1 : n; // e.g. 21 -> 21 rounds? classic uses n if odd -> n rounds (with bye)
+      META_ROUNDS.textContent = rounds;
+      META_MATCHES.textContent = Math.floor(playersList.length/2);
+    }
+
+    // Round Robin generator (circle method). Expects array of player objects.
+    // returns array of rounds; each round is array of pair objects {p1:{id,name}, p2:{id,name}, bye:bool}
+    function generateRoundRobin(arr, seedMode='elo'){
+      if(!Array.isArray(arr) || arr.length === 0) return [];
+      // copy
+      let players = arr.slice();
+
+      // seeding modes
+      if(seedMode === 'elo'){
+        players.sort((a,b)=> (b.elo||0) - (a.elo||0));
+      } else if(seedMode === 'alpha'){
+        players.sort((a,b)=> (''+a.name).localeCompare(b.name));
+      } // raw leaves order as loaded
+
+      // if odd, add BYE placeholder
+      let isOdd = players.length % 2 === 1;
+      const BYE = { id: null, name: 'BYE', elo: 0 };
+      if (isOdd) players.push(BYE);
+
+      const n = players.length;
+      const rounds = [];
+      // create arr of ids for rotation method
+      let arrRot = players.slice();
+      const fixed = arrRot[0];
+
+      for(let round = 0; round < n - 1; round++){
+        const pairs = [];
+        for(let i=0;i< n/2;i++){
+          const a = arrRot[i];
+          const b = arrRot[n - 1 - i];
+          if(a.id === null && b.id === null) continue;
+          // decide white/black: alternate to balance - odd rounds flip
+          const white = (i % 2 === 0) ? a : b;
+          const black = (i % 2 === 0) ? b : a;
+          pairs.push({
+            p1_id: white.id,
+            p2_id: black.id,
+            p1_name: white.name,
+            p2_name: black.name,
+            bye: (white.id === null || black.id === null)
+          });
+        }
+        rounds.push(pairs);
+        // rotate (keep first fixed)
+        arrRot = [arrRot[0], arrRot[arrRot.length-1], ...arrRot.slice(1, arrRot.length-1)];
+      }
+
+      return rounds;
+    }
+
+    // render preview as cards
+    function renderPreview(rounds, limitRounds=0){
+      PREVIEW.innerHTML = '';
+      const totalRounds = rounds.length;
+      const roundsToShow = limitRounds > 0 ? Math.min(limitRounds, totalRounds) : totalRounds;
+      for(let r=0;r<roundsToShow;r++){
+        const card = document.createElement('div');
+        card.className = 'round-card';
+        const head = document.createElement('div');
+        head.className = 'round-head';
+        head.innerHTML = `<h4>Ronda ${r+1}</h4><div class="badge">${rounds[r].length} partidas</div>`;
+        card.appendChild(head);
+
+        rounds[r].forEach(match => {
+          const m = document.createElement('div');
+          m.className = 'match';
+          const names = document.createElement('div');
+          names.className = 'names';
+          const p1 = document.createElement('span');
+          p1.textContent = match.p1_name + (match.bye ? ' (descansa)' : '');
+          const p2 = document.createElement('small');
+          p2.textContent = match.p2_name;
+          names.appendChild(p1);
+          names.appendChild(p2);
+
+          const right = document.createElement('div');
+          right.style.textAlign = 'right';
+          right.innerHTML = `<div style="font-size:12px;color:var(--muted)">${match.bye ? 'BYE' : 'vs'}</div>`;
+          m.appendChild(names);
+          m.appendChild(right);
+          card.appendChild(m);
+        });
+
+        PREVIEW.appendChild(card);
+      }
+    }
+
+    // generate & preview
+    BTN_GENERATE.addEventListener('click', ()=>{
+      if(playersList.length === 0){
+        alert('No hay jugadores en /jugadores. Verifica Firebase.');
+        return;
+      }
+      const seed = SEED_MODE.value;
+      calendar = generateRoundRobin(playersList, seed);
+      renderPreview(calendar);
+      META_ROUNDS.textContent = calendar.length;
+      BTN_SAVE.disabled = false;
+      BTN_SAVE.classList.remove('ghost');
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+
+    // sample preview (first 2 rounds)
+    BTN_PREVIEW_SAMPLE.addEventListener('click', ()=>{
+      if(!calendar) {
+        if(playersList.length===0) return alert('No players loaded');
+        calendar = generateRoundRobin(playersList, SEED_MODE.value);
+      }
+      renderPreview(calendar, 2);
+    });
+
+    BTN_CLEAR.addEventListener('click', ()=> {
+      PREVIEW.innerHTML = '';
+      BTN_SAVE.disabled = true;
+      BTN_SAVE.classList.add('ghost');
+    });
+
+    // Save calendar to Firebase under /calendario (overwrite)
+    BTN_SAVE.addEventListener('click', async ()=>{
+      if(!calendar) return alert('Genera el calendario primero.');
+      if(!confirm('Guardar calendario en Firebase en /calendario ? (Esto sobrescribirá /calendario existente)')) return;
+      try {
+        const obj = {};
+        calendar.forEach((roundPairs, idx) => {
+          const key = `ronda${idx+1}`;
+          obj[key] = roundPairs.map(m => ({
+            p1_id: m.p1_id,
+            p2_id: m.p2_id,
+            p1_name: m.p1_name,
+            p2_name: m.p2_name,
+            bye: !!m.bye
+          }));
+        });
+        await set(ref(db, 'calendario'), obj);
+        alert('Calendario guardado en /calendario ✔️');
+        BTN_SAVE.disabled = true;
+        BTN_SAVE.classList.add('ghost');
+      } catch (e){
+        console.error(e);
+        alert('Error al guardar: ' + e.message);
+      }
+    });
+
+    // Helper: optional show players in console (dev)
+    window._debugPlayers = ()=> playersList;
+    window._debugCalendar = ()=> calendar;
+
+  </script>
 </body>
 </html>
