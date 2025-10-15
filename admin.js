@@ -1,32 +1,36 @@
-document.getElementById('import-button').addEventListener('click', () => {
-  const csvData = document.getElementById('csv-data').value;
-  const players = csvData.split('\n').filter(line => line.trim() !== '');
+const uploadBtn = document.getElementById('upload-btn');
+const csvInput = document.getElementById('csv-input');
+const statusMessage = document.getElementById('status-message');
+const playersRef = database.ref('players');
 
-  if (players.length === 0) {
-    alert('Por favor, pega los datos de los jugadores.');
-    return;
-  }
+uploadBtn.addEventListener('click', () => {
+    const csvText = csvInput.value.trim();
+    if (!csvText) {
+        statusMessage.textContent = 'Por favor, pega el CSV.';
+        return;
+    }
 
-  const playersRef = database.ref('players');
-  
-  playersRef.remove()
-    .then(() => {
-      console.log('Jugadores anteriores eliminados.');
-      players.forEach(playerLine => {
-        const [name, elo, lichess] = playerLine.split(','); // <-- CAMBIO AQUÍ
-        if (name && elo && lichess) { // <-- CAMBIO AQUÍ
-          database.ref('players').push({
-            name: name.trim(),
-            elo: parseInt(elo.trim(), 10),
-            lichess: lichess.trim() // <-- CAMBIO AQUÍ
-          });
+    const newPlayersData = {}; // Usamos un objeto para el .set()
+    const lines = csvText.split('\n');
+    lines.forEach((line, index) => {
+        const [name, elo, lichess] = line.split(',').map(item => item.trim());
+        if (name && elo && lichess) {
+            // Creamos una clave única para cada jugador
+            const playerKey = player_;
+            newPlayersData[playerKey] = { name, elo: parseInt(elo), lichess };
         }
-      });
-      alert('¡' + players.length + ' jugadores importados con éxito!');
-      document.getElementById('csv-data').value = '';
-    })
-    .catch(error => {
-      console.error('Error al importar:', error);
-      alert('Hubo un error al importar los jugadores.');
     });
+
+    if (Object.keys(newPlayersData).length > 0) {
+        playersRef.set(newPlayersData) // .set() reemplaza todos los datos en 'players'
+            .then(() => {
+                statusMessage.textContent = '¡Jugadores subidos exitosamente!';
+                csvInput.value = ''; // Limpia el textarea
+            })
+            .catch(error => {
+                statusMessage.textContent = Error: ;
+            });
+    } else {
+        statusMessage.textContent = 'Formato CSV inválido o campo vacío.';
+    }
 });

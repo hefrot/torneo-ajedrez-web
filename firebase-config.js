@@ -1,4 +1,3 @@
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyC-qg8pD2OMjzOR5iwH_xIYVrwKlckCYGg",
   authDomain: "hmena-torneo-bc215.firebaseapp.com",
@@ -8,7 +7,5 @@ const firebaseConfig = {
   messagingSenderId: "843984319871",
   appId: "1:843984319871:web:3193a4c5d949b72616564a"
 };
-
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
