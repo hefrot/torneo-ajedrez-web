@@ -3,12 +3,12 @@ window.addEventListener('DOMContentLoaded', (event) => {
   const playersRef = database.ref('players');
 
   playersRef.on('value', (snapshot) => {
-    fixturesContainer.innerHTML = 'Cargando jugadores...'; // Mensaje de carga
+    fixturesContainer.innerHTML = 'Cargando jugadores...';
     const playersData = snapshot.val();
 
     if (playersData) {
       const playersList = Object.values(playersData);
-      fixturesContainer.innerHTML = ''; // Limpiamos el contenedor
+      fixturesContainer.innerHTML = ''; 
 
       const header = document.createElement('h2');
       header.textContent = 'Lista de Jugadores Registrados';
@@ -17,7 +17,8 @@ window.addEventListener('DOMContentLoaded', (event) => {
       const ul = document.createElement('ul');
       playersList.forEach(player => {
         const li = document.createElement('li');
-        li.textContent = ${player.name} (ELO: ) - ;
+        // V-- CAMBIO AQUÍ --V
+        li.textContent = ${player.name} (ELO: ) - Lichess: ;
         ul.appendChild(li);
       });
       fixturesContainer.appendChild(ul);

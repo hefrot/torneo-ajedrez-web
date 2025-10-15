@@ -7,26 +7,23 @@ document.getElementById('import-button').addEventListener('click', () => {
     return;
   }
 
-  // Obtenemos una referencia a la base de datos para 'players'
   const playersRef = database.ref('players');
   
-  // Borramos los jugadores anteriores para empezar de cero
   playersRef.remove()
     .then(() => {
       console.log('Jugadores anteriores eliminados.');
-      // Subimos cada jugador nuevo
       players.forEach(playerLine => {
-        const [name, elo, club] = playerLine.split(',');
-        if (name && elo && club) {
+        const [name, elo, lichess] = playerLine.split(','); // <-- CAMBIO AQUÍ
+        if (name && elo && lichess) { // <-- CAMBIO AQUÍ
           database.ref('players').push({
             name: name.trim(),
             elo: parseInt(elo.trim(), 10),
-            club: club.trim()
+            lichess: lichess.trim() // <-- CAMBIO AQUÍ
           });
         }
       });
       alert('¡' + players.length + ' jugadores importados con éxito!');
-      document.getElementById('csv-data').value = ''; // Limpiamos el campo
+      document.getElementById('csv-data').value = '';
     })
     .catch(error => {
       console.error('Error al importar:', error);
