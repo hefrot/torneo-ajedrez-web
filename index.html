@@ -1,93 +1,60 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <title>Torneo Round Robin — Calendario Oficial</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style-public.css" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Torneo de Ajedrez</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css"/>
+  <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-database-compat.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>♟️ Torneo Round Robin — Calendario Oficial</h1>
-      <p>Consulta con quién juegas cada ronda</p>
-      <div class="select-row">
-        <select id="ronda-select"></select>
-        <button id="refresh">🔄 Actualizar</button>
+  <header class="header">
+    <div class="header-inner container">
+      <div class="logo"></div>
+      <div class="title">
+        <div class="badge">Torneo</div>
+        <h1 class="title">Torneo de Ajedrez • Round Robin</h1>
       </div>
-    </header>
+      <div class="header-stats">
+        <div class="pill"><i class="fa-solid fa-user-group"></i> <span>Jugadores:</span> <strong id="statPlayers">0</strong></div>
+        <div class="pill"><i class="fa-solid fa-layer-group"></i> <span>Ronda:</span> <strong id="statRound">1</strong></div>
+        <div class="pill"><i class="fa-solid fa-chess-board"></i> <span>Partidas:</span> <strong id="statGames">0</strong></div>
+      </div>
+    </div>
+  </header>
 
-    <section id="matches" class="cards"></section>
+  <main class="container">
+    <section class="section">
+      <h2>Clasificación</h2>
+      <div id="playersGrid" class="grid cards"></div>
+    </section>
 
-    <footer>
-      <p>Powered by H. Mena • Firebase + GitHub Pages</p>
-    </footer>
-  </div>
+    <section class="section">
+      <h2>Pareos de la ronda <span id="roundTitle">1</span></h2>
+      <div id="pairingsGrid" class="grid"></div>
+    </section>
+  </main>
 
-  <script type="module">
-    import { firebaseConfig } from './firebase-config.js';
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-    import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+  <footer class="footer">
+    <div class="container">Actualiza la página para refrescar resultados. Datos en tiempo real vía Firebase.</div>
+  </footer>
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const dbRef = ref(db);
-
-    const rondaSelect = document.getElementById('ronda-select');
-    const matchesDiv = document.getElementById('matches');
-    const refreshBtn = document.getElementById('refresh');
-
-    let calendario = {};
-
-    async function cargarCalendario() {
-      matchesDiv.innerHTML = '<p class="loading">Cargando calendario...</p>';
-      try {
-        const snap = await get(child(dbRef, 'calendario'));
-        if (!snap.exists()) {
-          matchesDiv.innerHTML = '<p>No hay calendario cargado todavía.</p>';
-          return;
-        }
-        calendario = snap.val();
-        renderSelect();
-        renderRonda(Object.keys(calendario)[0]);
-      } catch (err) {
-        matchesDiv.innerHTML = '<p>Error al cargar calendario: ' + err + '</p>';
-      }
-    }
-
-    function renderSelect() {
-      rondaSelect.innerHTML = '';
-      Object.keys(calendario).forEach(r => {
-        const opt = document.createElement('option');
-        opt.value = r;
-        opt.textContent = r.replace('ronda','Ronda ');
-        rondaSelect.appendChild(opt);
-      });
-    }
-
-    function renderRonda(rondaKey) {
-      const ronda = calendario[rondaKey];
-      matchesDiv.innerHTML = '';
-      ronda.forEach(m => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = `
-          <div class="names">
-            <span class="white">${m.p1_name}</span>
-            <span class="vs">vs</span>
-            <span class="black">${m.p2_name}</span>
-          </div>
-          <div class="details">${m.bye ? 'BYE / Descansa' : '3 partidas (10min, 5min, 3min)'}</div>
-        `;
-        matchesDiv.appendChild(card);
-      });
-    }
-
-    rondaSelect.addEventListener('change', e => renderRonda(e.target.value));
-    refreshBtn.addEventListener('click', cargarCalendario);
-
-    cargarCalendario();
+  <script>
+  // Reemplaza por tus credenciales
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_AUTH_DOMAIN",
+    databaseURL: "TU_DATABASE_URL",
+    projectId: "TU_PROJECT_ID",
+    storageBucket: "TU_STORAGE_BUCKET",
+    messagingSenderId: "TU_SENDER_ID",
+    appId: "TU_APP_ID"
+  };
   </script>
+  <script src="./app.js" type="module"></script>
 </body>
 </html>
