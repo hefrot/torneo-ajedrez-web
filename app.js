@@ -1,17 +1,31 @@
-// app.js — Ranking por puntos de JUEGOS (3 por victoria, 1 por tablas), 3 juegos por enfrentamiento
+// app.js — Ranking por juegos (3/1/0) + ELO Performance + % rendimiento
+// Tips: ajusta DEFAULT_COUNTRY_CODE si tus números no traen +código
+const DEFAULT_COUNTRY_CODE = '52';
+
 (async function(){
   const { getDatabase, ref, onValue } =
     await import("https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js");
 
+  // WhatsApp: acepta '+', '00', o sólo dígitos locales (aplica DEFAULT_COUNTRY_CODE)
   const waLink = (raw) => {
     if(!raw) return null;
-    let num = String(raw).replace(/\s|-/g,'');
-    return num.startsWith('+') ? `https://wa.me/${num.replace('+','')}` : null;
+    let s = String(raw).trim();
+    // si es url directa de wa, respétala
+    if(/^https?:\/\/wa\.me\//i.test(s) || /^https?:\/\/api\.whatsapp\.com\//i.test(s)) return s;
+    s = s.replace(/\s|-/g, '');
+    if(s.startsWith('00')) s = '+' + s.slice(2);
+    if(!s.startsWith('+')) {
+      // si vino en formato local, prefiere MX +52 por defecto (ajustable)
+      if(/^\d{10,11}$/.test(s)) s = '+' + DEFAULT_COUNTRY_CODE + s.replace(/^0+/,'');
+      else return null;
+    }
+    const digits = s.replace('+','');
+    return `https://wa.me/${digits}`;
   };
+
   const esc = (s)=> String(s||'').replace(/[&<>\"']/g,
     c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':'&#39;' }[c]));
 
-  // --- UI refs
   const statPlayers = document.getElementById('statPlayers');
   const statRound   = document.getElementById('statRound');
   const statGames   = document.getElementById('statGames');
@@ -23,12 +37,9 @@
   if(!app){ console.error('Firebase app no inicializada'); return; }
   const db = getDatabase(app);
 
-  // Estado
   let currentRound = 1;
-  let rosterByName = {};  // name -> {name, rating, whatsapp}
-  let pairings = {};      // id -> pairing
+  let rosterByName = {}, pairings = {};
 
-  // Lee ronda actual
   onValue(ref(db,'tournament'), snap=>{
     const t = snap.val()||{};
     currentRound = t.currentRound || 1;
@@ -37,7 +48,6 @@
     renderPairings();
   });
 
-  // Lee jugadores (ROSTER). No contiene puntos; solo identidad.
   onValue(ref(db,'jugadores'), snap=>{
     const jug = snap.val()||{};
     rosterByName = {};
@@ -51,10 +61,9 @@
       };
     });
     statPlayers && (statPlayers.textContent = Object.keys(rosterByName).length);
-    renderLeaderboard(); // se recalcula cuando haya pairings también
+    renderLeaderboard();
   });
 
-  // Lee pairings (publicados) con game1..game3 y result
   onValue(ref(db,'pairings'), snap=>{
     pairings = snap.val()||{};
     const totalScheduledGames = Object.keys(pairings).length * 3;
@@ -63,42 +72,50 @@
     renderPairings();
   });
 
-  // --- Ranking desde pairings por JUEGO (3/1/0)
   function computeStatsFromPairings(){
-    // Inicializa stats para todos del roster
-    const stats = {};
+    const stats = {}, ensure = (n)=>{
+      if(!stats[n]) stats[n] = {name:n, rating:0, whatsapp:null, games:0,wins:0,draws:0,losses:0,points:0, roundsReported:0, perfOppSum:0, perfGames:0, perfScoreSum:0};
+      return stats[n];
+    };
     for(const name of Object.keys(rosterByName)){
       stats[name] = {
         name,
         rating: rosterByName[name].rating,
         whatsapp: rosterByName[name].whatsapp,
-        games: 0,     // juegos disputados (no enfrentamientos)
-        wins: 0,      // a nivel juego
-        draws: 0,
-        losses: 0,
-        points: 0     // 3/1/0 por juego
+        games: 0, wins:0, draws:0, losses:0,
+        points: 0,
+        roundsReported: 0,
+        perfOppSum: 0,
+        perfGames: 0,
+        perfScoreSum: 0
       };
     }
-    // Recorre pairings publicados y aplica game1..game3
     for(const p of Object.values(pairings)){
-      const w = p.white, b = p.black;
-      if(!stats[w]) stats[w] = {name:w, rating:0, whatsapp:null, games:0,wins:0,draws:0,losses:0,points:0};
-      if(!stats[b]) stats[b] = {name:b, rating:0, whatsapp:null, games:0,wins:0,draws:0,losses:0,points:0};
+      const wName = p.white, bName = p.black;
+      const w = ensure(wName), b = ensure(bName);
+      const wOppRating = rosterByName[bName]?.rating ?? 0;
+      const bOppRating = rosterByName[wName]?.rating ?? 0;
+
       const games = [p.game1, p.game2, p.game3];
+      const full = games.every(Boolean);
+      if(full){ w.roundsReported += 1; b.roundsReported += 1; }
       for(const g of games){
-        if(!g) { continue; } // si faltó cargar, no suma
-        if(g==='white'){
-          stats[w].points += 3; stats[w].wins += 1; stats[w].games += 1;
-          stats[b].losses += 1; stats[b].games += 1;
-        }else if(g==='black'){
-          stats[b].points += 3; stats[b].wins += 1; stats[b].games += 1;
-          stats[w].losses += 1; stats[w].games += 1;
-        }else if(g==='draw'){
-          stats[w].points += 1; stats[b].points += 1;
-          stats[w].draws += 1; stats[b].draws += 1;
-          stats[w].games += 1; stats[b].games += 1;
-        }
+        if(!g) continue;
+        if(g==='white'){ w.points += 3; w.wins += 1; w.games += 1; b.losses += 1; b.games += 1; w.perfScoreSum += 1;   b.perfScoreSum += 0; }
+        else if(g==='black'){ b.points += 3; b.wins += 1; b.games += 1; w.losses += 1; w.games += 1; b.perfScoreSum += 1;   w.perfScoreSum += 0; }
+        else if(g==='draw'){ w.points += 1; b.points += 1; w.draws += 1; b.draws += 1; w.games += 1; b.games += 1; w.perfScoreSum += 0.5; b.perfScoreSum += 0.5; }
+        w.perfOppSum += wOppRating; b.perfOppSum += bOppRating; w.perfGames  += 1; b.perfGames  += 1;
       }
+    }
+    for(const s of Object.values(stats)){
+      if(s.perfGames > 0){
+        const Ra = s.perfOppSum / s.perfGames;
+        const p  = s.perfScoreSum / s.perfGames;
+        s.perf   = Math.round(Ra + 800*p - 400); // ELO performance (lineal)
+      }else{ s.perf = null; }
+      const maxPts = s.roundsReported * 9;
+      s.maxPts = maxPts;
+      s.pct = maxPts ? Math.round((s.points / maxPts) * 100) : 0;
     }
     return stats;
   }
@@ -119,6 +136,9 @@
     const arr = Object.values(stats);
     sortPlayers(arr).forEach((p,i)=>{
       const podium = (i===0?'gold': i===1?'silver': i===2?'bronze':'');
+      const maxLabel = p.maxPts ? ` / ${p.maxPts} (9×${p.roundsReported})` : '';
+      const perfLabel = (p.perf ? `ELO Perf: ${p.perf}` : 'ELO Perf: —');
+      const pctLabel = (p.maxPts ? `${p.pct}%` : '—');
       const card = document.createElement('div');
       card.className = 'card fadein';
       card.innerHTML = `
@@ -130,13 +150,16 @@
           <span class="badge">ELO ${p.rating||'-'}</span>
         </div>
         <div class="card-body">
+          <div class="kv"><span>Rondas reportadas</span><strong>${p.roundsReported}</strong></div>
+          <div class="kv"><span>Puntos (máx 9 por ronda)</span><strong>${p.points}${maxLabel}</strong></div>
+          <div class="kv"><span>% rendimiento</span><strong>${pctLabel}</strong></div>
           <div class="kv"><span>Juegos</span><strong>${p.games}</strong></div>
-          <div class="kv"><span>Puntos</span><strong>${p.points}</strong></div>
           <div class="kv"><span>G / E / P (juegos)</span><strong>
             <span class="tag win">${p.wins} G</span>
             <span class="tag draw">${p.draws} E</span>
             <span class="tag loss">${p.losses} P</span>
           </strong></div>
+          <div class="kv"><span>${esc(perfLabel)}</span></div>
           ${p.whatsapp ? `<a class="tag whatsapp" target="_blank" rel="noopener" href="${waLink(p.whatsapp)}"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>`:''}
         </div>
       `;
@@ -160,13 +183,10 @@
       card.className = 'card pairing fadein';
       const waW = waLink(m.whiteWhatsapp);
       const waB = waLink(m.blackWhatsapp);
-      // Construye marcador textual por juegos si ya hay datos
       const g = [m.game1, m.game2, m.game3].map(x=>x||'—');
       const scoreLabel = (function(){
         let w=0,b=0;
-        for(const x of [m.game1, m.game2, m.game3]){
-          if(x==='white') w++; else if(x==='black') b++; // esto es solo visual por victorias
-        }
+        for(const x of [m.game1, m.game2, m.game3]){ if(x==='white') w++; else if(x==='black') b++; }
         return (w||b) ? `(${w}-${b})` : '(0-0)';
       })();
       card.innerHTML = `
