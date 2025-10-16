@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="./style.css">
   <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
   <style>
-    /* —— micro-estilo específico del calendario —— */
     .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
     .search{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:rgba(21,29,47,.6)}
     .search input{border:0;outline:none;background:transparent;color:var(--text);min-width:240px}
@@ -73,56 +72,69 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-    // ——— utilidades de país / banderas / whatsapp ———
-    const COUNTRY_TO_DIAL = {
-      MX:'52', AR:'54', CL:'56', CO:'57', PE:'51', EC:'593', UY:'598', PY:'595', BO:'591', VE:'58',
-      CR:'506', PA:'507', GT:'502', SV:'503', HN:'504', NI:'505', BR:'55', DO:'1', RD:'1', PR:'1',
-      US:'1', USA:'1', ES:'34', CU:'53'
-    };
-    const NAME_TO_ISO = {
-      'MEXICO':'MX','MÉXICO':'MX','ARGENTINA':'AR','CHILE':'CL','COLOMBIA':'CO','PERU':'PE','PERÚ':'PE','ECUADOR':'EC',
-      'URUGUAY':'UY','PARAGUAY':'PY','BOLIVIA':'BO','VENEZUELA':'VE','COSTA RICA':'CR','PANAMA':'PA','PANAMÁ':'PA',
-      'GUATEMALA':'GT','EL SALVADOR':'SV','HONDURAS':'HN','NICARAGUA':'NI','BRASIL':'BR','BRAZIL':'BR',
-      'REPUBLICA DOMINICANA':'DO','REPÚBLICA DOMINICANA':'DO','PUERTO RICO':'PR','ESTADOS UNIDOS':'US','ESPAÑA':'ES','CUBA':'CU'
-    };
-    const DIAL_TO_ISO = Object.fromEntries(Object.entries(COUNTRY_TO_DIAL).map(([iso,dial])=>[dial,iso]));
-    const DEFAULT_DIAL = '52'; // fallback si falta
+    // helpers
+    
+// Country helpers
+const COUNTRY_TO_DIAL = {
+  MX:'52', AR:'54', CL:'56', CO:'57', PE:'51', EC:'593', UY:'598', PY:'595', BO:'591', VE:'58',
+  CR:'506', PA:'507', GT:'502', SV:'503', HN:'504', NI:'505', BR:'55', DO:'1', RD:'1', PR:'1',
+  US:'1', USA:'1', ES:'34', CU:'53'
+};
+const NAME_TO_ISO = {
+  'MEXICO':'MX','MÉXICO':'MX','ARGENTINA':'AR','CHILE':'CL','COLOMBIA':'CO','PERU':'PE','PERÚ':'PE','ECUADOR':'EC',
+  'URUGUAY':'UY','PARAGUAY':'PY','BOLIVIA':'BO','VENEZUELA':'VE','COSTA RICA':'CR','PANAMA':'PA','PANAMÁ':'PA',
+  'GUATEMALA':'GT','EL SALVADOR':'SV','HONDURAS':'HN','NICARAGUA':'NI','BRASIL':'BR','BRAZIL':'BR',
+  'REPUBLICA DOMINICANA':'DO','REPÚBLICA DOMINICANA':'DO','PUERTO RICO':'PR','ESTADOS UNIDOS':'US','ESPAÑA':'ES','CUBA':'CU'
+};
+const DIAL_TO_ISO = Object.fromEntries(Object.entries(COUNTRY_TO_DIAL).map(([iso,dial])=>[dial,iso]));
+const DEFAULT_DIAL = '52'; // fallback if player has no country
+const A_FLAG = 0x1F1E6;
 
-    const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
-    function resolveISO(raw){
-      if(!raw) return null;
-      let s = String(raw).trim().toUpperCase();
-      if (s.startsWith('+')) s = s.slice(1);
-      if (/^[A-Z]{2}$/.test(s)) return s; // ISO2
-      // nombre de país
-      const s2 = s.normalize('NFD').replace(/\p{Diacritic}/gu,'');
-      if (NAME_TO_ISO[s2]) return NAME_TO_ISO[s2];
-      // si vino un código telefónico (52, 57, 593...)
-      if (/^\d{1,4}$/.test(s)) return DIAL_TO_ISO[s] || null;
-      return null;
-    }
-    function isoToFlag(iso){
-      if(!iso || iso.length!==2) return '🏳️';
-      const A = 0x1F1E6;
-      const a = iso.charCodeAt(0)-65, b = iso.charCodeAt(1)-65;
-      return String.fromCodePoint(A+a) + String.fromCodePoint(A+b);
-    }
-    function waLink(raw, isoHint){
-      if(!raw) return null;
-      let s = String(raw).trim();
-      if(/^https?:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(s)) return s;
-      s = s.replace(/\s|-/g,'');
-      if (s.startsWith('00')) s = '+'+s.slice(2);
-      if (!s.startsWith('+')){
-        const iso = resolveISO(isoHint);
-        const dial = iso ? COUNTRY_TO_DIAL[iso] : DEFAULT_DIAL;
-        if (/^\d{8,12}$/.test(s)) s = '+' + (dial||DEFAULT_DIAL) + s.replace(/^0+/,'');
-        else return null;
-      }
-      return 'https://wa.me/' + s.replace('+','');
-    }
+const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
 
-    // ——— app ———
+function resolveISO(raw){
+  if(!raw) return null;
+  let s = String(raw).trim().toUpperCase();
+  if (s.startsWith('+')) s = s.slice(1);
+  if (/^[A-Z]{2}$/.test(s)) return s; // ISO2 direct
+  const s2 = s.normalize('NFD').replace(/\p{Diacritic}/gu,'');
+  if (NAME_TO_ISO[s2]) return NAME_TO_ISO[s2];
+  if (/^\d{1,4}$/.test(s)) return DIAL_TO_ISO[s] || null; // dial to ISO
+  return null;
+}
+
+function isoToFlag(iso){
+  if(!iso || iso.length!==2) return '🏳️';
+  const a = iso.charCodeAt(0)-65, b = iso.charCodeAt(1)-65;
+  return String.fromCodePoint(A_FLAG+a) + String.fromCodePoint(A_FLAG+b);
+}
+
+function lichessLink(user){
+  if(!user) return null;
+  const u = String(user).replace(/^@/,'').trim();
+  if(!u) return null;
+  return `https://lichess.org/@/${u}`;
+}
+
+function waLink(raw, isoHint){
+  if(!raw) return null;
+  let s = String(raw).trim();
+  if(/^https?:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(s)) return s;
+  s = s.replace(/\s|-/g,'');
+  if (s.startsWith('00')) s = '+'+s.slice(2);
+  if (!s.startsWith('+')){
+    const iso = resolveISO(isoHint);
+    const dial = iso ? COUNTRY_TO_DIAL[iso] : DEFAULT_DIAL;
+    if (/^\d{8,12}$/.test(s)) s = '+' + (dial||DEFAULT_DIAL) + s.replace(/^0+/,''); else return null;
+  }
+  return 'https://wa.me/' + s.replace('+','');
+}
+
+function esc(s){
+  return String(s||'').replace(/[&<>\"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
@@ -131,13 +143,9 @@
     const BTN_CLEAR = document.getElementById('btn-clear');
     const SHARE = document.getElementById('shareLink');
 
-    let calendario = {};        // {ronda1:[...]}
-    let pairings   = [];        // lista de pareos publicados
-    let roster     = {};        // name -> { whatsapp, iso, lichess }
-
+    let calendario = {}, pairings = [], roster = {};
     const params = new URLSearchParams(location.search);
-    const playerParam = params.get('player');
-    if (playerParam) { Q.value = playerParam; }
+    const playerParam = params.get('player'); if (playerParam) Q.value = playerParam;
 
     onValue(ref(db,'jugadores'), snap=>{
       const obj = snap.val()||{};
@@ -154,20 +162,16 @@
       }
       render();
     });
-
     onValue(ref(db,'calendario'), snap=>{ calendario = snap.val()||{}; render(); });
     onValue(ref(db,'pairings'),   snap=>{ const obj = snap.val()||{}; pairings = Object.values(obj||{}); render(); });
 
     function findPair(round, a, b){
       const A = norm(a), B = norm(b);
-      return pairings.find(m=>{
-        if(Number(m.round)!==Number(round)) return false;
-        const W = norm(m.white), BL = norm(m.black);
-        return (W===A && BL===B) || (W===B && BL===A);
-      }) || null;
+      return pairings.find(m=> Number(m.round)===Number(round) && (
+        (norm(m.white)===A && norm(m.black)===B) || (norm(m.white)===B && norm(m.black)===A)
+      )) || null;
     }
-
-    function matchChip(v){
+    function chip(v){
       if(v==='white') return `<span class="chip white">1–0 (blancas)</span>`;
       if(v==='black') return `<span class="chip black">0–1 (negras)</span>`;
       if(v==='draw')  return `<span class="chip draw">½–½</span>`;
@@ -177,8 +181,7 @@
     function render(){
       const q = norm(Q.value);
       CAL.innerHTML = '';
-      const rounds = Object.keys(calendario)
-        .filter(k=>/^ronda\d+$/i.test(k))
+      const rounds = Object.keys(calendario).filter(k=>/^ronda\d+$/i.test(k))
         .sort((a,b)=> Number(a.replace(/\D/g,'')) - Number(b.replace(/\D/g,'')));
 
       rounds.forEach((key,idx)=>{
@@ -190,22 +193,17 @@
         const block = document.createElement('div');
         block.className = 'round-block';
 
-        // cabecera colapsable
         const head = document.createElement('div');
         head.className = 'round-title';
-        head.dataset.open = (idx<2 ? 'true' : 'false'); // primeras 2 rondas abiertas por defecto
-        head.innerHTML = `
-          <h3><span class="chev">▾</span> Ronda ${r}</h3>
-          <div class="meta">
-            <span class="badge">${filtered.length} partidas</span>
-            <span class="pill"><i class="fa-regular fa-eye"></i> <span>${head.dataset.open==='true'?'Mostrando':'Oculta'}</span></span>
-          </div>`;
+        head.dataset.open = (idx<2 ? 'true' : 'false');
+        head.innerHTML = `<h3><span class="chev">▾</span> Ronda ${r}</h3>
+          <div class="meta"><span class="badge">${filtered.length} partidas</span>
+          <span class="pill"><i class="fa-regular fa-eye"></i> <span>${head.dataset.open==='true'?'Mostrando':'Oculta'}</span></span></div>`;
         block.appendChild(head);
 
         const list = document.createElement('div');
         list.className = 'matches';
         list.style.display = (head.dataset.open==='true'?'grid':'none');
-
         head.addEventListener('click',()=>{
           const open = head.dataset.open === 'true';
           head.dataset.open = open ? 'false' : 'true';
@@ -217,18 +215,14 @@
           const p = findPair(r, m.p1_name, m.p2_name);
           const left  = roster[m.p1_name] || {};
           const right = roster[m.p2_name] || {};
-          const waL = (p?.whiteWhatsapp) || left.whatsapp  || null;
-          const waR = (p?.blackWhatsapp) || right.whatsapp || null;
-          const linkL = waLink(waL, left.iso);
-          const linkR = waLink(waR, right.iso);
-          const flagL = isoToFlag(left.iso||'');
-          const flagR = isoToFlag(right.iso||'');
+          const linkL = waLink(p?.whiteWhatsapp || left.whatsapp,  left.iso);
+          const linkR = waLink(p?.blackWhatsapp || right.whatsapp, right.iso);
+          const flagL = isoToFlag(left.iso||''), flagR = isoToFlag(right.iso||'');
+          const lichL = left.lichess  ? `<a class="user-pill" target="_blank" href="${lichessLink(left.lichess)}"><i class="fa-brands fa-lichess"></i>@${esc(String(left.lichess).replace(/^@/,''))}</a>` : '';
+          const lichR = right.lichess ? `<a class="user-pill" target="_blank" href="${lichessLink(right.lichess)}"><i class="fa-brands fa-lichess"></i>@${esc(String(right.lichess).replace(/^@/,''))}</a>` : '';
 
           const g1 = p?.game1 || null, g2 = p?.game2 || null, g3 = p?.game3 || null;
           const status = p?.result ? (p.result==='white' ? `Ganó ${m.p1_name}` : p.result==='black' ? `Ganó ${m.p2_name}` : 'Tablas') : 'Pendiente';
-
-          const lichL = left.lichess ? `<span class="user-pill"><i class="fa-brands fa-lichess"></i>@${left.lichess}</span>`:'';
-          const lichR = right.lichess? `<span class="user-pill"><i class="fa-brands fa-lichess"></i>@${right.lichess}</span>`:'';
 
           const row = document.createElement('div');
           row.className = 'match-row';
@@ -247,12 +241,9 @@
               <span class="flag">${flagR}</span>
             </div>
             <div class="status">
-              <div class="game-chips">
-                ${matchChip(g1)} ${matchChip(g2)} ${matchChip(g3)}
-              </div>
+              <div class="game-chips">${chip(g1)} ${chip(g2)} ${chip(g3)}</div>
               <div class="badge">${status}</div>
-            </div>
-          `;
+            </div>`;
           list.appendChild(row);
         });
 
@@ -261,7 +252,6 @@
       });
     }
 
-    // búsqueda / compartir
     const updateShare = () => SHARE.href = `?player=${encodeURIComponent(Q.value||'')}`;
     Q.addEventListener('input', ()=>{ updateShare(); render(); });
     BTN_CLEAR.addEventListener('click', ()=>{ Q.value=''; updateShare(); render(); });
