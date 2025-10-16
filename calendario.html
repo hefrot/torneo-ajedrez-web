@@ -1,24 +1,42 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Calendario • Torneo de Ajedrez</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css">
   <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
   <style>
-    .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-    .search{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:rgba(21,29,47,.6)}
+    /* —— micro-estilo específico del calendario —— */
+    .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+    .search{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:rgba(21,29,47,.6)}
     .search input{border:0;outline:none;background:transparent;color:var(--text);min-width:240px}
-    .round-block{margin:18px 0;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg, rgba(21,29,47,.9), rgba(21,29,47,.75))}
-    .round-title{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+    .round-block{margin:18px 0;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg, rgba(21,29,47,.9), rgba(21,29,47,.75));overflow:hidden}
+    .round-title{position:sticky;top:64px;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);backdrop-filter:blur(6px);cursor:pointer}
+    .round-title h3{display:flex;align-items:center;gap:10px;margin:0}
+    .round-title .chev{transition:transform .22s ease}
+    .round-title[data-open="false"] .chev{transform:rotate(-90deg)}
+    .round-title .meta{display:flex;gap:8px;align-items:center}
     .matches{display:grid;gap:10px;padding:12px}
-    .match-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;padding:10px 12px;border:1px dashed var(--line);border-radius:12px}
-    .names{display:flex;gap:8px;align-items:center;overflow:auto}
-    .names a{display:inline-flex;gap:6px;align-items:center}
-    .status{font-size:12px; grid-column: 1 / -1; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap}
-    .muted{color:var(--muted)}
+    .match-row{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;transition:transform .12s ease, box-shadow .12s ease}
+    .match-row:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+    .names{display:flex;gap:10px;align-items:center;overflow:auto}
+    .flag{font-size:18px}
+    .user-pill{font-size:12px;border:1px solid var(--line);padding:4px 8px;border-radius:999px;opacity:.9}
+    .user-pill i{margin-right:6px}
+    .wa-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:999px;border:1px solid var(--line);background:rgba(0,0,0,.15)}
+    .status{grid-column:1/-1;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px}
+    .game-chips{display:flex;gap:6px;flex-wrap:wrap}
+    .chip{padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);font-weight:600}
+    .chip.white{color:var(--text)}
+    .chip.black{color:var(--text)}
+    .chip.draw{color:var(--muted)}
+    .chip.na{color:var(--muted)}
+    @media (max-width:720px){
+      .match-row{grid-template-columns:1fr;gap:6px}
+      .status{justify-content:flex-start}
+    }
   </style>
 </head>
 <body>
@@ -55,55 +73,56 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-    // === WhatsApp helpers (multi-país) ===
-    const COUNTRY_MAP = {
-      'MX': '52','MEXICO':'52',
-      'AR': '54','ARGENTINA':'54',
-      'CL': '56','CHILE':'56',
-      'CO': '57','COLOMBIA':'57',
-      'PE': '51','PERU':'51','PERÚ':'51',
-      'EC': '593','ECUADOR':'593',
-      'UY': '598','URUGUAY':'598',
-      'PY': '595','PARAGUAY':'595',
-      'BO': '591','BOLIVIA':'591',
-      'VE': '58','VENEZUELA':'58',
-      'CR': '506','COSTA RICA':'506',
-      'PA': '507','PANAMA':'507','PANAMÁ':'507',
-      'GT': '502','GUATEMALA':'502',
-      'SV': '503','EL SALVADOR':'503',
-      'HN': '504','HONDURAS':'504',
-      'NI': '505','NICARAGUA':'505',
-      'BR': '55','BRASIL':'55','BRAZIL':'55',
-      'DO': '1','RD':'1','REPUBLICA DOMINICANA':'1','REPÚBLICA DOMINICANA':'1',
-      'PR': '1','PUERTO RICO':'1',
-      'US': '1','USA':'1','EEUU':'1','ESTADOS UNIDOS':'1',
-      'ES': '34','ESPAÑA':'34',
-      'CU': '53','CUBA':'53'
+    // ——— utilidades de país / banderas / whatsapp ———
+    const COUNTRY_TO_DIAL = {
+      MX:'52', AR:'54', CL:'56', CO:'57', PE:'51', EC:'593', UY:'598', PY:'595', BO:'591', VE:'58',
+      CR:'506', PA:'507', GT:'502', SV:'503', HN:'504', NI:'505', BR:'55', DO:'1', RD:'1', PR:'1',
+      US:'1', USA:'1', ES:'34', CU:'53'
     };
-    const DEFAULT_COUNTRY_CODE = '52'; // fallback si no hay cc por jugador
-    function normCC(raw){
+    const NAME_TO_ISO = {
+      'MEXICO':'MX','MÉXICO':'MX','ARGENTINA':'AR','CHILE':'CL','COLOMBIA':'CO','PERU':'PE','PERÚ':'PE','ECUADOR':'EC',
+      'URUGUAY':'UY','PARAGUAY':'PY','BOLIVIA':'BO','VENEZUELA':'VE','COSTA RICA':'CR','PANAMA':'PA','PANAMÁ':'PA',
+      'GUATEMALA':'GT','EL SALVADOR':'SV','HONDURAS':'HN','NICARAGUA':'NI','BRASIL':'BR','BRAZIL':'BR',
+      'REPUBLICA DOMINICANA':'DO','REPÚBLICA DOMINICANA':'DO','PUERTO RICO':'PR','ESTADOS UNIDOS':'US','ESPAÑA':'ES','CUBA':'CU'
+    };
+    const DIAL_TO_ISO = Object.fromEntries(Object.entries(COUNTRY_TO_DIAL).map(([iso,dial])=>[dial,iso]));
+    const DEFAULT_DIAL = '52'; // fallback si falta
+
+    const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
+    function resolveISO(raw){
       if(!raw) return null;
       let s = String(raw).trim().toUpperCase();
-      if(s.startsWith('+')) s = s.slice(1);
-      if(/^\d{1,4}$/.test(s)) return s;
-      s = s.normalize('NFD').replace(/\p{Diacritic}/gu,'');
-      return COUNTRY_MAP[s] || null;
+      if (s.startsWith('+')) s = s.slice(1);
+      if (/^[A-Z]{2}$/.test(s)) return s; // ISO2
+      // nombre de país
+      const s2 = s.normalize('NFD').replace(/\p{Diacritic}/gu,'');
+      if (NAME_TO_ISO[s2]) return NAME_TO_ISO[s2];
+      // si vino un código telefónico (52, 57, 593...)
+      if (/^\d{1,4}$/.test(s)) return DIAL_TO_ISO[s] || null;
+      return null;
     }
-    function waLink(raw, ccHint){
+    function isoToFlag(iso){
+      if(!iso || iso.length!==2) return '🏳️';
+      const A = 0x1F1E6;
+      const a = iso.charCodeAt(0)-65, b = iso.charCodeAt(1)-65;
+      return String.fromCodePoint(A+a) + String.fromCodePoint(A+b);
+    }
+    function waLink(raw, isoHint){
       if(!raw) return null;
       let s = String(raw).trim();
-      if(/^https?:\/\/wa\.me\//i.test(s) || /^https?:\/\/api\.whatsapp\.com\//i.test(s)) return s;
+      if(/^https?:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(s)) return s;
       s = s.replace(/\s|-/g,'');
-      if(s.startsWith('00')) s = '+' + s.slice(2);
-      if(!s.startsWith('+')){
-        let cc = normCC(ccHint) || DEFAULT_COUNTRY_CODE;
-        if(/^\d{8,12}$/.test(s)) s = '+' + cc + s.replace(/^0+/,'');
+      if (s.startsWith('00')) s = '+'+s.slice(2);
+      if (!s.startsWith('+')){
+        const iso = resolveISO(isoHint);
+        const dial = iso ? COUNTRY_TO_DIAL[iso] : DEFAULT_DIAL;
+        if (/^\d{8,12}$/.test(s)) s = '+' + (dial||DEFAULT_DIAL) + s.replace(/^0+/,'');
         else return null;
       }
       return 'https://wa.me/' + s.replace('+','');
     }
 
-    // === App ===
+    // ——— app ———
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
@@ -112,105 +131,128 @@
     const BTN_CLEAR = document.getElementById('btn-clear');
     const SHARE = document.getElementById('shareLink');
 
-    let calendario = {};   // { ronda1: [ ... ] }
-    let pairings = [];     // arr de pairings publicados
-    let roster = {};       // name -> {whatsapp, cc}
-    let filtro = "";
+    let calendario = {};        // {ronda1:[...]}
+    let pairings   = [];        // lista de pareos publicados
+    let roster     = {};        // name -> { whatsapp, iso, lichess }
 
     const params = new URLSearchParams(location.search);
     const playerParam = params.get('player');
-    if (playerParam) { Q.value = playerParam; filtro = playerParam; }
+    if (playerParam) { Q.value = playerParam; }
 
-    function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,''); }
-
-    // Carga roster para obtener WhatsApp/cc por jugador
-    onValue(ref(db,'jugadores'), snap => {
-      const obj = snap.val() || {};
+    onValue(ref(db,'jugadores'), snap=>{
+      const obj = snap.val()||{};
       roster = {};
-      Object.values(obj).forEach(p=>{
+      for(const p of Object.values(obj)){
         const name = p.nombre || p.name || p.nombreCompleto;
-        if(!name) return;
+        if(!name) continue;
+        const iso = resolveISO(p.countryISO || p.pais || p.country || p.countryCode || p.cc);
         roster[name] = {
           whatsapp: p.whatsapp || p.telefono || null,
-          cc: p.countryCode || p.cc || p.pais || p.country || null
+          iso: iso || null,
+          lichess: p.lichess || p.lichessUser || p.lichess_username || null
         };
-      });
+      }
       render();
     });
 
-    onValue(ref(db,'calendario'), snap => { calendario = snap.val() || {}; render(); });
-    onValue(ref(db,'pairings'), snap => { const obj = snap.val() || {}; pairings = Object.values(obj); render(); });
+    onValue(ref(db,'calendario'), snap=>{ calendario = snap.val()||{}; render(); });
+    onValue(ref(db,'pairings'),   snap=>{ const obj = snap.val()||{}; pairings = Object.values(obj||{}); render(); });
 
-    function matchResultFor(round, p1, p2){
-      const n1 = norm(p1), n2 = norm(p2);
-      for (const m of pairings) {
-        if (Number(m.round) !== Number(round)) continue;
-        const a = norm(m.white), b = norm(m.black);
-        const same = ( (a===n1 && b===n2) || (a===n2 && b===n1) );
-        if (same) return m;
-      }
-      return null;
+    function findPair(round, a, b){
+      const A = norm(a), B = norm(b);
+      return pairings.find(m=>{
+        if(Number(m.round)!==Number(round)) return false;
+        const W = norm(m.white), BL = norm(m.black);
+        return (W===A && BL===B) || (W===B && BL===A);
+      }) || null;
+    }
+
+    function matchChip(v){
+      if(v==='white') return `<span class="chip white">1–0 (blancas)</span>`;
+      if(v==='black') return `<span class="chip black">0–1 (negras)</span>`;
+      if(v==='draw')  return `<span class="chip draw">½–½</span>`;
+      return `<span class="chip na">—</span>`;
     }
 
     function render(){
+      const q = norm(Q.value);
       CAL.innerHTML = '';
       const rounds = Object.keys(calendario)
-        .filter(k => /^ronda\d+$/i.test(k))
+        .filter(k=>/^ronda\d+$/i.test(k))
         .sort((a,b)=> Number(a.replace(/\D/g,'')) - Number(b.replace(/\D/g,'')));
 
-      rounds.forEach(key => {
+      rounds.forEach((key,idx)=>{
         const r = Number(key.replace(/\D/g,''));
         const matches = calendario[key]||[];
-        const fm = filtro ? matches.filter(m => {
-          const n1 = norm(m.p1_name), n2 = norm(m.p2_name);
-          return n1.includes(norm(filtro)) || n2.includes(norm(filtro));
-        }) : matches;
-
-        if (fm.length === 0) return;
+        const filtered = q ? matches.filter(m=> norm(m.p1_name).includes(q)||norm(m.p2_name).includes(q) ) : matches;
+        if(!filtered.length) return;
 
         const block = document.createElement('div');
         block.className = 'round-block';
 
+        // cabecera colapsable
         const head = document.createElement('div');
         head.className = 'round-title';
-        head.innerHTML = `<h3>Ronda ${r}</h3><div class="badge">${fm.length} partidas</div>`;
+        head.dataset.open = (idx<2 ? 'true' : 'false'); // primeras 2 rondas abiertas por defecto
+        head.innerHTML = `
+          <h3><span class="chev">▾</span> Ronda ${r}</h3>
+          <div class="meta">
+            <span class="badge">${filtered.length} partidas</span>
+            <span class="pill"><i class="fa-regular fa-eye"></i> <span>${head.dataset.open==='true'?'Mostrando':'Oculta'}</span></span>
+          </div>`;
         block.appendChild(head);
 
         const list = document.createElement('div');
         list.className = 'matches';
+        list.style.display = (head.dataset.open==='true'?'grid':'none');
 
-        fm.forEach(m => {
-          const p = matchResultFor(r, m.p1_name, m.p2_name);
+        head.addEventListener('click',()=>{
+          const open = head.dataset.open === 'true';
+          head.dataset.open = open ? 'false' : 'true';
+          list.style.display = open ? 'none':'grid';
+          head.querySelector('.pill span').textContent = open ? 'Oculta':'Mostrando';
+        });
+
+        filtered.forEach(m=>{
+          const p = findPair(r, m.p1_name, m.p2_name);
+          const left  = roster[m.p1_name] || {};
+          const right = roster[m.p2_name] || {};
+          const waL = (p?.whiteWhatsapp) || left.whatsapp  || null;
+          const waR = (p?.blackWhatsapp) || right.whatsapp || null;
+          const linkL = waLink(waL, left.iso);
+          const linkR = waLink(waR, right.iso);
+          const flagL = isoToFlag(left.iso||'');
+          const flagR = isoToFlag(right.iso||'');
+
+          const g1 = p?.game1 || null, g2 = p?.game2 || null, g3 = p?.game3 || null;
+          const status = p?.result ? (p.result==='white' ? `Ganó ${m.p1_name}` : p.result==='black' ? `Ganó ${m.p2_name}` : 'Tablas') : 'Pendiente';
+
+          const lichL = left.lichess ? `<span class="user-pill"><i class="fa-brands fa-lichess"></i>@${left.lichess}</span>`:'';
+          const lichR = right.lichess? `<span class="user-pill"><i class="fa-brands fa-lichess"></i>@${right.lichess}</span>`:'';
+
           const row = document.createElement('div');
           row.className = 'match-row';
-
-          // Preferimos wa de pairing si vienen; si no, del roster
-          const leftRoster  = roster[m.p1_name] || {};
-          const rightRoster = roster[m.p2_name] || {};
-          const leftWA  = p?.whiteWhatsapp || leftRoster.whatsapp || null;
-          const rightWA = p?.blackWhatsapp || rightRoster.whatsapp || null;
-          const w1 = waLink(leftWA,  leftRoster.cc);
-          const w2 = waLink(rightWA, rightRoster.cc);
-
-          const g1 = p?.game1 || '—', g2 = p?.game2 || '—', g3 = p?.game3 || '—';
-          const resText = p?.result ? (p.result==='white' ? `Ganó ${m.p1_name}` : p.result==='black' ? `Ganó ${m.p2_name}` : 'Tablas') : 'Pendiente';
-
           row.innerHTML = `
             <div class="names">
-              ${w1 ? `<a class="btn" target="_blank" rel="noopener" href="${w1}"><i class="fa-brands fa-whatsapp"></i></a>` : ''}
-              <span>${m.p1_name}</span>
+              <span class="flag">${flagL}</span>
+              <strong>${m.p1_name}</strong>
+              ${lichL}
+              ${linkL? `<a class="wa-btn" target="_blank" rel="noopener" href="${linkL}" title="WhatsApp ${m.p1_name}"><i class="fa-brands fa-whatsapp"></i></a>`:''}
             </div>
             <div class="muted">vs</div>
-            <div class="names">
-              <span>${m.p2_name}</span>
-              ${w2 ? `<a class="btn" target="_blank" rel="noopener" href="${w2}"><i class="fa-brands fa-whatsapp"></i></a>` : ''}
+            <div class="names" style="justify-content:flex-end">
+              ${linkR? `<a class="wa-btn" target="_blank" rel="noopener" href="${linkR}" title="WhatsApp ${m.p2_name}"><i class="fa-brands fa-whatsapp"></i></a>`:''}
+              ${lichR}
+              <strong>${m.p2_name}</strong>
+              <span class="flag">${flagR}</span>
             </div>
             <div class="status">
-              <div class="muted">J1: <strong>${g1}</strong> • J2: <strong>${g2}</strong> • J3: <strong>${g3}</strong></div>
-              <div>${resText}</div>
+              <div class="game-chips">
+                ${matchChip(g1)} ${matchChip(g2)} ${matchChip(g3)}
+              </div>
+              <div class="badge">${status}</div>
             </div>
           `;
-
           list.appendChild(row);
         });
 
@@ -219,9 +261,11 @@
       });
     }
 
-    Q.addEventListener('input', () => { filtro = Q.value.trim(); SHARE.href = `?player=${encodeURIComponent(filtro)}`; render(); });
-    BTN_CLEAR.addEventListener('click', () => { Q.value = ''; filtro = ''; SHARE.href = `?player=`; render(); });
-    SHARE.href = `?player=${encodeURIComponent(Q.value||'')}`;
+    // búsqueda / compartir
+    const updateShare = () => SHARE.href = `?player=${encodeURIComponent(Q.value||'')}`;
+    Q.addEventListener('input', ()=>{ updateShare(); render(); });
+    BTN_CLEAR.addEventListener('click', ()=>{ Q.value=''; updateShare(); render(); });
+    updateShare();
   </script>
 </body>
 </html>
