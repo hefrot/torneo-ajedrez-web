@@ -40,6 +40,7 @@
 
   <main class="container">
     <div class="wrap">
+      <!-- SELECCIÓN -->
       <section class="section panel">
         <h2 style="margin-top:0">Selecciona tu partida</h2>
         <div class="toolbar">
@@ -56,9 +57,10 @@
             <select id="matchSelect"></select>
           </div>
         </div>
-        <div class="help">Tip: escribe tu apellido para filtrar rápido.</div>
+        <div class="help">Tip: escribe tu apellido para filtrar rápido. La lista se llena desde <code>/calendario</code> y, al guardar, se crea/actualiza <code>/pairings</code>.</div>
       </section>
 
+      <!-- MARCADORES -->
       <section class="section panel">
         <h2 style="margin-top:0">Marcadores por juego (obligatorios)</h2>
         <div class="row-3">
@@ -90,7 +92,7 @@
             </select>
           </div>
         </div>
-        <div class="help">⚠️ Se juegan SIEMPRE los 3 juegos. El sistema no permite guardar si falta alguno.</div>
+        <div class="help">⚠️ En esta liga se juegan SIEMPRE los 3 juegos. No deja guardar si falta alguno.</div>
 
         <div class="row" style="margin-top:12px">
           <div class="input">
@@ -109,6 +111,7 @@
         </div>
       </section>
 
+      <!-- PREVIA -->
       <section class="section panel">
         <h2 style="margin-top:0">Vista previa</h2>
         <div id="preview" class="muted">Selecciona una partida para ver el detalle.</div>
@@ -120,12 +123,13 @@
     import { firebaseConfig } from './firebase-config.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
-    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+    import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getDatabase(app);
 
+    // UI
     const Q = document.getElementById('q');
     const ROUND = document.getElementById('roundSelect');
     const MATCH = document.getElementById('matchSelect');
@@ -138,16 +142,15 @@
     const REPORTER = document.getElementById('reporter');
     const NOTE = document.getElementById('note');
 
+    // Estado
     let uid = null;
-    signInAnonymously(auth).catch(console.error);
-    onAuthStateChanged(auth, (user)=>{ uid = user?.uid || null; });
+    let calendario = {};      // /calendario
+    let pairingsById = {};    // /pairings
+    let matchLookup = {};     // key -> {round, white, black, pairingId?}
 
-    let allPairings = {};
-    let allRounds = [];
-    let filteredIds = [];
-
-    function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,''); }
-    function vsLabel(p){ return `${p.white} vs ${p.black}`; }
+    // Helpers
+    const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
+    const vsLabel = (w,b)=> `${w} vs ${b}`;
     function calcWinner(g1,g2,g3){
       const pts = { white:0, black:0 };
       for(const g of [g1,g2,g3]){
@@ -160,55 +163,94 @@
       if(pts.black>pts.white) return 'black';
       return 'draw';
     }
-
-    function renderRounds(){
-      const set = new Set(Object.values(allPairings).map(p=> Number(p.round||0)));
-      allRounds = Array.from(set).filter(Boolean).sort((a,b)=>a-b);
-      ROUND.innerHTML = allRounds.map(r=>`<option value="${r}">Ronda ${r}</option>`).join('');
+    function safeKey(s){
+      return norm(s).replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
     }
+    function makePairKey(round, white, black){
+      // ordenamos alfabéticamente para que sea estable si cambian colores
+      const a = safeKey(white), b = safeKey(black);
+      const [x,y] = [a,b].sort();
+      return `r${round}_${x}__${y}`;
+    }
+    function findExistingPair(round, white, black){
+      // busca en /pairings por coincidencia de nombres (sin acentos)
+      const A = norm(white), B = norm(black);
+      for(const [id,p] of Object.entries(pairingsById)){
+        if(Number(p.round)!==Number(round)) continue;
+        const pw = norm(p.white||''), pb = norm(p.black||'');
+        if((pw===A && pb===B) || (pw===B && pb===A)) return id;
+      }
+      return null;
+    }
+
+    // Auth anónima
+    signInAnonymously(auth).catch(console.error);
+    onAuthStateChanged(auth, (user)=>{ uid = user?.uid || null; });
+
+    // Suscripciones
+    onValue(ref(db,'calendario'), snap=>{ calendario = snap.val()||{}; renderRounds(); renderMatches(); });
+    onValue(ref(db,'pairings'),   snap=>{ pairingsById = snap.val()||{}; renderRounds(); renderMatches(); });
+
+    // Render Rondas (desde /calendario)
+    function renderRounds(){
+      const rounds = Object.keys(calendario).filter(k=>/^ronda\d+$/i.test(k))
+        .map(k=>Number(k.replace(/\D/g,''))).sort((a,b)=>a-b);
+      ROUND.innerHTML = rounds.map(r=>`<option value="${r}">Ronda ${r}</option>`).join('');
+      if(!ROUND.value && rounds.length) ROUND.value = String(rounds[0]);
+    }
+
+    // Render Partidas (desde /calendario + filtro de búsqueda)
     function renderMatches(){
       const r = Number(ROUND.value);
+      const key = `ronda${r}`;
+      const list = calendario[key] || [];
       const q = norm(Q.value);
-      const ids = Object.entries(allPairings)
-        .filter(([id,p]) => Number(p.round)===r)
-        .filter(([id,p]) => !q || norm(p.white).includes(q) || norm(p.black).includes(q))
-        .map(([id])=>id);
-      filteredIds = ids;
-      MATCH.innerHTML = ids.map(id=>{
-        const p = allPairings[id];
-        const res = p.result || 'pendiente';
-        return `<option value="${id}">${vsLabel(p)}  —  [${res}]</option>`;
+      const filtered = q ? list.filter(m=> norm(m.p1_name).includes(q) || norm(m.p2_name).includes(q) ) : list;
+
+      matchLookup = {};
+      MATCH.innerHTML = filtered.map((m,idx)=>{
+        const existingId = findExistingPair(r, m.p1_name, m.p2_name);
+        const keyVal = existingId || makePairKey(r, m.p1_name, m.p2_name);
+        matchLookup[keyVal] = { round:r, white:m.p1_name, black:m.p2_name, pairingId: existingId || null };
+        const tag = existingId ? 'publicada' : 'nueva';
+        return `<option value="${keyVal}">${vsLabel(m.p1_name, m.p2_name)} — [${tag}]</option>`;
       }).join('');
       renderPreview();
     }
+
     function renderPreview(){
       const id = MATCH.value;
       if(!id){ PREVIEW.textContent = 'Selecciona una partida.'; return; }
-      const p = allPairings[id];
+      const m = matchLookup[id];
+      if(!m){ PREVIEW.textContent = 'Selecciona una partida.'; return; }
+
+      // Si existe en /pairings, muestra estado actual
+      let p = null;
+      if(m.pairingId) p = pairingsById[m.pairingId];
+
       PREVIEW.innerHTML = `
-        <div class="kv"><span>Ronda</span> <strong>${p.round}</strong></div>
-        <div class="kv"><span>Partida</span> <strong>${vsLabel(p)}</strong></div>
-        <div class="kv"><span>Estado</span> <strong>${p.result || 'pendiente'}</strong></div>
-        <div class="kv"><span>Última actualización</span> <strong>${p.updatedAt ? new Date(p.updatedAt).toLocaleString() : '—'}</strong></div>
+        <div class="kv"><span>Ronda</span> <strong>${m.round}</strong></div>
+        <div class="kv"><span>Partida</span> <strong>${vsLabel(m.white, m.black)}</strong></div>
+        <div class="kv"><span>Estado</span> <strong>${p?.result || 'pendiente'}</strong></div>
+        <div class="kv"><span>Última actualización</span> <strong>${p?.updatedAt ? new Date(p.updatedAt).toLocaleString() : '—'}</strong></div>
       `;
-      G1.value = p.game1 || '';
-      G2.value = p.game2 || '';
-      G3.value = p.game3 || '';
+      G1.value = p?.game1 || '';
+      G2.value = p?.game2 || '';
+      G3.value = p?.game3 || '';
     }
 
-    onValue(ref(db, 'pairings'), snap => {
-      allPairings = snap.val() || {};
-      renderRounds();
-      renderMatches();
-    });
-
+    // Eventos UI
     Q.addEventListener('input', renderMatches);
     ROUND.addEventListener('change', renderMatches);
     MATCH.addEventListener('change', renderPreview);
 
+    // Guardar resultado (crea/actualiza /pairings)
     BTN_SAVE.addEventListener('click', async ()=>{
-      const id = MATCH.value;
-      if(!id) { STATUS.textContent = 'Selecciona una partida.'; return; }
+      const key = MATCH.value;
+      if(!key){ STATUS.textContent = 'Selecciona una partida.'; return; }
+      const m = matchLookup[key];
+      if(!m){ STATUS.textContent = 'Selecciona una partida válida.'; return; }
+
       const g1 = G1.value, g2 = G2.value, g3 = G3.value;
       if(!g1 || !g2 || !g3){
         STATUS.innerHTML = '<span class="status-bad">Debes seleccionar los 3 juegos (G1, G2, G3).</span>';
@@ -219,7 +261,14 @@
         STATUS.innerHTML = '<span class="status-bad">Completa todos los juegos para calcular el resultado global.</span>';
         return;
       }
+
+      const payloadBase = {
+        white: m.white,
+        black: m.black,
+        round: m.round
+      };
       const payload = {
+        ...payloadBase,
         game1: g1, game2: g2, game3: g3,
         result: overall,
         updatedAt: Date.now(),
@@ -227,8 +276,12 @@
         note: (NOTE.value || '').trim() || null,
         reporterUid: uid || null
       };
+
       try{
-        await update(ref(db, `pairings/${id}`), payload);
+        const path = `pairings/${m.pairingId || key}`;
+        // Si no existía, crea el nodo primero para asegurar white/black/round
+        if(!m.pairingId) await set(ref(db, path), payloadBase);
+        await update(ref(db, path), payload);
         STATUS.innerHTML = `<span class="status-ok">✔️ Resultado guardado (${overall}).</span>`;
       }catch(e){
         console.error(e);
