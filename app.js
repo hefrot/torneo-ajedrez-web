@@ -1,27 +1,60 @@
-// app.js — Ranking por juegos (3/1/0) + ELO Performance + % rendimiento
-// Tips: ajusta DEFAULT_COUNTRY_CODE si tus números no traen +código
+// app.js — Ranking por juegos (3/1/0) + ELO Performance + % rendimiento + WhatsApp multi-país
 const DEFAULT_COUNTRY_CODE = '52';
+
+const COUNTRY_MAP = {
+  // ISO2 or common names -> country calling code (string, no +)
+  'MX': '52', 'MEXICO': '52',
+  'AR': '54', 'ARGENTINA': '54',
+  'CL': '56', 'CHILE': '56',
+  'CO': '57', 'COLOMBIA': '57',
+  'PE': '51', 'PERU': '51', 'PERÚ': '51',
+  'EC': '593', 'ECUADOR': '593',
+  'UY': '598', 'URUGUAY': '598',
+  'PY': '595', 'PARAGUAY': '595',
+  'BO': '591', 'BOLIVIA': '591',
+  'VE': '58',  'VENEZUELA': '58',
+  'CR': '506', 'COSTA RICA': '506',
+  'PA': '507', 'PANAMA': '507', 'PANAMÁ': '507',
+  'GT': '502', 'GUATEMALA': '502',
+  'SV': '503', 'EL SALVADOR': '503',
+  'HN': '504', 'HONDURAS': '504',
+  'NI': '505', 'NICARAGUA': '505',
+  'BR': '55',  'BRASIL': '55', 'BRAZIL': '55',
+  'DO': '1',   'RD': '1', 'REPUBLICA DOMINICANA': '1', 'REPÚBLICA DOMINICANA': '1',
+  'PR': '1',   'PUERTO RICO': '1',
+  'US': '1',   'USA': '1', 'EEUU': '1', 'ESTADOS UNIDOS': '1',
+  'ES': '34',  'ESPAÑA': '34',
+  'CU': '53',  'CUBA': '53'
+};
+function normCC(raw) {
+  if(!raw) return null;
+  let s = String(raw).trim().toUpperCase();
+  if(s.startsWith('+')) s = s.slice(1);
+  if(/^\d{1,4}$/.test(s)) return s; // '52' or '593'
+  // normalize names
+  s = s.normalize('NFD').replace(/\p{Diacritic}/gu,'');
+  return COUNTRY_MAP[s] || null;
+}
 
 (async function(){
   const { getDatabase, ref, onValue } =
     await import("https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js");
 
-  // WhatsApp: acepta '+', '00', o sólo dígitos locales (aplica DEFAULT_COUNTRY_CODE)
-  const waLink = (raw) => {
+  function waLink(raw, ccHint){
     if(!raw) return null;
     let s = String(raw).trim();
-    // si es url directa de wa, respétala
+    // if full URL, keep
     if(/^https?:\/\/wa\.me\//i.test(s) || /^https?:\/\/api\.whatsapp\.com\//i.test(s)) return s;
     s = s.replace(/\s|-/g, '');
     if(s.startsWith('00')) s = '+' + s.slice(2);
-    if(!s.startsWith('+')) {
-      // si vino en formato local, prefiere MX +52 por defecto (ajustable)
-      if(/^\d{10,11}$/.test(s)) s = '+' + DEFAULT_COUNTRY_CODE + s.replace(/^0+/,'');
+    if(!s.startsWith('+')){
+      // choose per-player country first
+      let cc = normCC(ccHint) || DEFAULT_COUNTRY_CODE;
+      if(/^\d{8,12}$/.test(s)) s = '+' + cc + s.replace(/^0+/,'');
       else return null;
     }
-    const digits = s.replace('+','');
-    return `https://wa.me/${digits}`;
-  };
+    return 'https://wa.me/' + s.replace('+','');
+  }
 
   const esc = (s)=> String(s||'').replace(/[&<>\"']/g,
     c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':'&#39;' }[c]));
@@ -54,10 +87,15 @@ const DEFAULT_COUNTRY_CODE = '52';
     Object.values(jug).forEach(p => {
       const name = p.nombre || p.name || p.nombreCompleto;
       if(!name) return;
+      // intenta leer cc de varios campos: countryCode | cc | pais | country
+      const cc =
+        p.countryCode || p.cc ||
+        p.pais || p.country || null;
       rosterByName[name] = {
         name,
         rating: Number(p.eloActual ?? p.elo ?? 1000),
-        whatsapp: p.whatsapp || p.telefono || null
+        whatsapp: p.whatsapp || p.telefono || null,
+        cc
       };
     });
     statPlayers && (statPlayers.textContent = Object.keys(rosterByName).length);
@@ -74,14 +112,16 @@ const DEFAULT_COUNTRY_CODE = '52';
 
   function computeStatsFromPairings(){
     const stats = {}, ensure = (n)=>{
-      if(!stats[n]) stats[n] = {name:n, rating:0, whatsapp:null, games:0,wins:0,draws:0,losses:0,points:0, roundsReported:0, perfOppSum:0, perfGames:0, perfScoreSum:0};
+      if(!stats[n]) stats[n] = {name:n, rating:0, whatsapp:null, cc:null, games:0,wins:0,draws:0,losses:0,points:0, roundsReported:0, perfOppSum:0, perfGames:0, perfScoreSum:0};
       return stats[n];
     };
     for(const name of Object.keys(rosterByName)){
+      const r = rosterByName[name];
       stats[name] = {
         name,
-        rating: rosterByName[name].rating,
-        whatsapp: rosterByName[name].whatsapp,
+        rating: r.rating,
+        whatsapp: r.whatsapp,
+        cc: r.cc || null,
         games: 0, wins:0, draws:0, losses:0,
         points: 0,
         roundsReported: 0,
@@ -111,7 +151,7 @@ const DEFAULT_COUNTRY_CODE = '52';
       if(s.perfGames > 0){
         const Ra = s.perfOppSum / s.perfGames;
         const p  = s.perfScoreSum / s.perfGames;
-        s.perf   = Math.round(Ra + 800*p - 400); // ELO performance (lineal)
+        s.perf   = Math.round(Ra + 800*p - 400);
       }else{ s.perf = null; }
       const maxPts = s.roundsReported * 9;
       s.maxPts = maxPts;
@@ -141,6 +181,7 @@ const DEFAULT_COUNTRY_CODE = '52';
       const pctLabel = (p.maxPts ? `${p.pct}%` : '—');
       const card = document.createElement('div');
       card.className = 'card fadein';
+      const wa = p.whatsapp ? waLink(p.whatsapp, p.cc) : null;
       card.innerHTML = `
         <div class="card-header">
           <div class="rank ${podium}">
@@ -160,7 +201,7 @@ const DEFAULT_COUNTRY_CODE = '52';
             <span class="tag loss">${p.losses} P</span>
           </strong></div>
           <div class="kv"><span>${esc(perfLabel)}</span></div>
-          ${p.whatsapp ? `<a class="tag whatsapp" target="_blank" rel="noopener" href="${waLink(p.whatsapp)}"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>`:''}
+          ${wa ? `<a class="tag whatsapp" target="_blank" rel="noopener" href="${wa}"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>`:''}
         </div>
       `;
       playersGrid.appendChild(card);
@@ -181,8 +222,12 @@ const DEFAULT_COUNTRY_CODE = '52';
     list.forEach(m=>{
       const card = document.createElement('div');
       card.className = 'card pairing fadein';
-      const waW = waLink(m.whiteWhatsapp);
-      const waB = waLink(m.blackWhatsapp);
+      // toma whatsapp directo del pairing si lo hay; si no, del roster (con cc por jugador)
+      const wRec = rosterByName[m.white] || {};
+      const bRec = rosterByName[m.black] || {};
+      const waW = m.whiteWhatsapp ? waLink(m.whiteWhatsapp, wRec.cc) : (wRec.whatsapp ? waLink(wRec.whatsapp, wRec.cc) : null);
+      const waB = m.blackWhatsapp ? waLink(m.blackWhatsapp, bRec.cc) : (bRec.whatsapp ? waLink(bRec.whatsapp, bRec.cc) : null);
+
       const g = [m.game1, m.game2, m.game3].map(x=>x||'—');
       const scoreLabel = (function(){
         let w=0,b=0;
