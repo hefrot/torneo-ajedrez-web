@@ -88,3 +88,9 @@ legend{padding:0 8px;color:var(--muted)}
 .names{display:flex;flex-direction:column;gap:4px}
 .names span{font-weight:600}
 .names small{color:var(--muted)}
+
+/* Calendario - detalles visuales */
+.round-block .badge { background: rgba(0,217,255,.08); border:1px solid rgba(0,217,255,.25); }
+.round-title:hover { background: rgba(255,255,255,.02); }
+.wa-btn:hover { box-shadow: 0 0 0 3px rgba(0,217,255,.18) inset; }
+.user-pill { background: rgba(255,255,255,.04); }
