@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Herramientas • Normalizar WhatsApp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
+  <style>
+    .wrap{max-width:1100px;margin:0 auto}
+    .panel{background:linear-gradient(180deg, rgba(21,29,47,.9), rgba(21,29,47,.78));border:1px solid var(--line);border-radius:16px;padding:16px}
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    thead th{font-weight:700;color:var(--muted);text-align:left;font-size:12px;padding:6px 10px}
+    tbody tr{background:linear-gradient(180deg, rgba(21,29,47,.9), rgba(21,29,47,.78));border:1px solid var(--line)}
+    tbody td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:middle}
+    tbody tr:first-child td{border-top-left-radius:12px;border-top-right-radius:12px}
+    tbody tr:last-child td{border-bottom-left-radius:12px;border-bottom-right-radius:12px}
+    input, select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(21,29,47,.6);color:var(--text)}
+    .flag{font-size:18px}
+    .muted{color:var(--muted)}
+    .ok{color:var(--win)} .bad{color:var(--loss)}
+    .btn.small{padding:6px 10px;font-size:12px}
+    .pill strong{margin-left:6px}
+    .sticky-head{position:sticky;top:64px;background:rgba(10,14,26,.85);backdrop-filter:blur(6px);z-index:2}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner container">
+      <div class="logo"></div>
+      <div class="title">
+        <div class="badge">Herramientas</div>
+        <h1 class="title">Normalizar WhatsApp (E.164)</h1>
+      </div>
+      <nav style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
+        <a class="pill" href="./index.html"><i class="fa-solid fa-house"></i> <span>Inicio</span></a>
+        <a class="pill" href="./calendario.html"><i class="fa-solid fa-calendar"></i> <span>Calendario</span></a>
+        <a class="pill" href="./reportar.html"><i class="fa-solid fa-pen-to-square"></i> <span>Reportar</span></a>
+        <a class="pill" href="./tabla.html"><i class="fa-solid fa-ranking-star"></i> <span>Tabla</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="section panel">
+      <div class="toolbar">
+        <div class="pill"><i class="fa-solid fa-users"></i> Jugadores: <strong id="count">0</strong></div>
+        <div class="pill"><i class="fa-solid fa-check"></i> Listos: <strong id="ok">0</strong></div>
+        <div class="pill"><i class="fa-solid fa-triangle-exclamation"></i> Por corregir: <strong id="pending">0</strong></div>
+        <button id="btn-save-all" class="btn"><i class="fa-solid fa-floppy-disk"></i> Guardar todo</button>
+      </div>
+      <div class="panel sticky-head">
+        <div class="muted" style="font-size:13px">
+          Reglas: acepta formatos con <code>+</code>, con <code>00</code> o solo dígitos. Si no hay <code>+</code>, usa el país (ISO2) para agregar el prefijo. 
+          Caso especial Argentina: se inserta <code>9</code> tras <code>+54</code> para móviles.
+        </div>
+      </div>
+      <div class="panel" style="margin-top:10px">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nombre</th>
+              <th>País</th>
+              <th>Actual</th>
+              <th>Sugerido</th>
+              <th>Estado</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { firebaseConfig } from './firebase-config.js';
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    signInAnonymously(auth).catch(()=>{});
+    const db = getDatabase(app);
+
+    // --- helpers (mismos del sitio) ---
+    const COUNTRY_TO_DIAL={MX:'52',AR:'54',CL:'56',CO:'57',PE:'51',EC:'593',UY:'598',PY:'595',BO:'591',VE:'58',CR:'506',PA:'507',GT:'502',SV:'503',HN:'504',NI:'505',BR:'55',DO:'1',RD:'1',PR:'1',US:'1',USA:'1',ES:'34',CU:'53'};
+    const NAME_TO_ISO={'MEXICO':'MX','MÉXICO':'MX','ARGENTINA':'AR','CHILE':'CL','COLOMBIA':'CO','PERU':'PE','PERÚ':'PE','ECUADOR':'EC','URUGUAY':'UY','PARAGUAY':'PY','BOLIVIA':'BO','VENEZUELA':'VE','COSTA RICA':'CR','PANAMA':'PA','PANAMÁ':'PA','GUATEMALA':'GT','EL SALVADOR':'SV','HONDURAS':'HN','NICARAGUA':'NI','BRASIL':'BR','BRAZIL':'BR','REPUBLICA DOMINICANA':'DO','REPÚBLICA DOMINICANA':'DO','PUERTO RICO':'PR','ESTADOS UNIDOS':'US','ESPAÑA':'ES','CUBA':'CU'};
+    const DIAL_TO_ISO=Object.fromEntries(Object.entries(COUNTRY_TO_DIAL).map(([iso,dial])=>[dial,iso]));
+    const A_FLAG=0x1F1E6;
+    const isoToFlag=iso=>{if(!iso||iso.length!==2) return '🏳️'; const a=iso.charCodeAt(0)-65, b=iso.charCodeAt(1)-65; return String.fromCodePoint(A_FLAG+a)+String.fromCodePoint(A_FLAG+b);};
+    const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
+    const resolveISO=raw=>{ if(!raw) return null; let s=String(raw).trim().toUpperCase(); if(s.startsWith('+')) s=s.slice(1); if(/^[A-Z]{2}$/.test(s)) return s; const s2=s.normalize('NFD').replace(/\p{Diacritic}/gu,''); if(NAME_TO_ISO[s2]) return NAME_TO_ISO[s2]; if(/^\d{1,4}$/.test(s)) return DIAL_TO_ISO[s]||null; return null; };
+    function cleanDigits(s){ return String(s||'').replace(/[^0-9+]/g,''); }
+    function suggestISOFromPhone(raw){
+      const s=cleanDigits(raw);
+      if(s.startsWith('+')){
+        const dial=s.slice(1).slice(0,3); // up to 3–4 digits
+        for(let len=1; len<=4; len++){
+          const code=s.slice(1,1+len);
+          if(DIAL_TO_ISO[code]) return DIAL_TO_ISO[code];
+        }
+      }
+      return null;
+    }
+    function e164(iso, numberRaw){
+      if(!numberRaw) return null;
+      let s=cleanDigits(numberRaw);
+      if(s.startsWith('00')) s='+'+s.slice(2);
+      if(s.startsWith('+')){
+        return '+'+s.replace('+','');
+      }
+      const cc = COUNTRY_TO_DIAL[iso||''] || null;
+      if(!cc) return null;
+      s = s.replace(/^0+/,''); // quitar ceros a la izquierda
+      // Caso especial Argentina móviles: insertar 9 tras +54 si no está
+      if(iso==='AR' && !s.startsWith('9')) s='9'+s;
+      return `+${cc}${s}`;
+    }
+
+    const TB=document.querySelector('#tbl tbody');
+    const COUNT=document.getElementById('count'), OK=document.getElementById('ok'), PENDING=document.getElementById('pending');
+    const SAVEALL=document.getElementById('btn-save-all');
+
+    let jugadores={}, rows=[];
+
+    onValue(ref(db,'jugadores'), snap=>{
+      jugadores = snap.val()||{};
+      render();
+    });
+
+    function render(){
+      const list = Object.entries(jugadores).map(([id,p])=>{
+        const name = p.nombre || p.name || p.nombreCompleto || ('Jugador '+id.slice(-4));
+        const iso  = resolveISO(p.pais || p.countryISO || p.country || p.countryCode || p.cc) || suggestISOFromPhone(p.whatsapp) || '';
+        const sug  = e164(iso || null, p.whatsapp || '');
+        const ok   = !!sug && sug===cleanDigits(p.whatsapp).replace(/^00/,'+').replace(/(?!^\+)\+/g,'');
+        return {id,name,iso,sug,ok,raw:p.whatsapp||''};
+      });
+      rows = list;
+      draw();
+    }
+
+    function draw(){
+      TB.innerHTML='';
+      let ok=0;
+      rows.forEach((r,idx)=>{
+        if(r.ok) ok++;
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td><strong>${r.name}</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="flag">${isoToFlag(r.iso||'')}</span>
+              <input data-id="${r.id}" class="iso" value="${r.iso||''}" style="width:70px" placeholder="MX">
+            </div>
+          </td>
+          <td><input data-id="${r.id}" class="raw" value="${r.raw||''}" style="width:180px" placeholder="+521234567890"></td>
+          <td><input data-id="${r.id}" class="sug" value="${r.sug||''}" style="width:200px"></td>
+          <td class="${r.ok?'ok':'bad'}">${r.ok?'OK':'Revisar'}</td>
+          <td><button data-id="${r.id}" class="btn small save">Guardar</button></td>
+        `;
+        TB.appendChild(tr);
+      });
+      COUNT.textContent = rows.length;
+      OK.textContent = ok;
+      PENDING.textContent = rows.length - ok;
+
+      // Wire inputs
+      TB.querySelectorAll('input.iso, input.raw').forEach(inp=>{
+        inp.addEventListener('input', (e)=>{
+          const id = e.target.getAttribute('data-id');
+          const row = rows.find(r=>r.id===id);
+          if(!row) return;
+          if(e.target.classList.contains('iso')) row.iso = e.target.value.toUpperCase();
+          else row.raw = e.target.value;
+          row.sug = e164(row.iso||null, row.raw||'');
+          row.ok = !!row.sug && (row.sug === cleanDigits(row.raw).replace(/^00/,'+').replace(/(?!^\+)\+/g,''));
+          draw();
+        });
+      });
+      TB.querySelectorAll('button.save').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const id = btn.getAttribute('data-id');
+          const row = rows.find(r=>r.id===id);
+          if(!row) return;
+          const payload = {};
+          if(row.iso) payload['pais'] = row.iso;
+          if(row.sug) payload['whatsapp'] = row.sug;
+          try{
+            await update(ref(db, `jugadores/${id}`), payload);
+            btn.textContent='✔ Guardado';
+            setTimeout(()=>btn.textContent='Guardar', 1500);
+          }catch(e){
+            btn.textContent='Error';
+            console.error(e);
+          }
+        });
+      });
+    }
+
+    SAVEALL.addEventListener('click', async ()=>{
+      for(const row of rows){
+        const payload = {};
+        if(row.iso) payload['pais']=row.iso;
+        if(row.sug) payload['whatsapp']=row.sug;
+        try{ await update(ref(db, `jugadores/${row.id}`), payload); }catch(e){ console.error(e); }
+      }
+      alert('Cambios guardados.');
+    });
+  </script>
+</body>
+</html>
