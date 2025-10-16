@@ -14,14 +14,12 @@
     .round-block{margin:18px 0;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg, rgba(21,29,47,.9), rgba(21,29,47,.75))}
     .round-title{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
     .matches{display:grid;gap:10px;padding:12px}
-    .match-row{display:grid;grid-template-columns:1fr auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px dashed var(--line);border-radius:12px}
-    .match-row .names{display:flex;gap:8px;align-items:center;overflow:auto}
+    .match-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;padding:10px 12px;border:1px dashed var(--line);border-radius:12px}
+    .names{display:flex;gap:8px;align-items:center;overflow:auto}
+    .names a{display:inline-flex;gap:6px;align-items:center}
     .status{font-size:12px}
-    .result.win{color:var(--win)}
-    .result.loss{color:var(--loss)}
-    .result.draw{color:var(--draw)}
     .muted{color:var(--muted)}
-    .pill-link{border:1px solid var(--line);padding:6px 10px;border-radius:999px}
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
   </style>
 </head>
 <body>
@@ -34,6 +32,7 @@
       </div>
       <div class="header-stats" style="margin-left:auto">
         <a class="pill" href="./index.html"><i class="fa-solid fa-arrow-left"></i> <span>Volver</span></a>
+        <a class="pill" href="./reportar.html"><i class="fa-solid fa-pen-to-square"></i> <span>Reportar</span></a>
       </div>
     </div>
   </header>
@@ -46,7 +45,7 @@
           <input id="q" placeholder="Buscar jugador (ej. Mena, Jorge, etc.)" />
         </div>
         <button id="btn-clear" class="btn">Limpiar</button>
-        <a class="pill-link" href="?player=" id="shareLink" target="_blank">Compartir vista del jugador</a>
+        <a class="pill" href="?player=" id="shareLink" target="_blank"><i class="fa-solid fa-share-nodes"></i> Compartir vista</a>
       </div>
       <div id="calendar"></div>
     </section>
@@ -66,39 +65,39 @@
     const SHARE = document.getElementById('shareLink');
 
     let calendario = {};   // { ronda1: [ ... ], ... }
-    let pairings = [];     // publicados (con resultados)
-    let filtro = "";       // texto de búsqueda
+    let pairings = [];     // publicados
+    let filtro = "";
 
     const params = new URLSearchParams(location.search);
     const playerParam = params.get('player');
-    if (playerParam) {
-      Q.value = playerParam;
-      filtro = playerParam;
-    }
+    if (playerParam) { Q.value = playerParam; filtro = playerParam; }
 
     function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,''); }
+    function waLink(raw){
+      if(!raw) return null;
+      let s = String(raw).trim().replace(/\s|-/g,'');
+      if(/^https?:\/\/wa\.me\//i.test(s) || /^https?:\/\/api\.whatsapp\.com\//i.test(s)) return s;
+      if(s.startsWith('00')) s = '+' + s.slice(2);
+      if(!s.startsWith('+')){
+        if(/^\d{10,11}$/.test(s)) s = '+52' + s.replace(/^0+/,'');
+        else return null;
+      }
+      return 'https://wa.me/' + s.replace('+','');
+    }
 
     function matchResultFor(round, p1, p2){
-      // busca resultado en pairings publicados de la misma ronda (ignorando colores)
       const n1 = norm(p1), n2 = norm(p2);
       for (const m of pairings) {
         if (Number(m.round) !== Number(round)) continue;
         const a = norm(m.white), b = norm(m.black);
         const same = ( (a===n1 && b===n2) || (a===n2 && b===n1) );
-        if (same) return m.result || 'pendiente';
+        if (same) return m;
       }
-      return 'pendiente';
-    }
-
-    function waLink(raw){
-      if(!raw) return null;
-      let num = String(raw).replace(/\s|-/g,'');
-      return num.startsWith('+') ? `https://wa.me/${num.replace('+','')}` : null;
+      return null;
     }
 
     function render(){
       CAL.innerHTML = '';
-      // ordenar rondas por número
       const rounds = Object.keys(calendario)
         .filter(k => /^ronda\d+$/i.test(k))
         .sort((a,b)=> Number(a.replace(/\D/g,'')) - Number(b.replace(/\D/g,'')));
@@ -106,8 +105,6 @@
       rounds.forEach(key => {
         const r = Number(key.replace(/\D/g,''));
         const matches = calendario[key]||[];
-
-        // filtra por jugador si aplica
         const fm = filtro ? matches.filter(m => {
           const n1 = norm(m.p1_name), n2 = norm(m.p2_name);
           return n1.includes(norm(filtro)) || n2.includes(norm(filtro));
@@ -127,26 +124,32 @@
         list.className = 'matches';
 
         fm.forEach(m => {
-          const res = matchResultFor(r, m.p1_name, m.p2_name);
-          let statusHTML = `<span class="muted">pendiente</span>`;
-          if (res === 'white') statusHTML = `<span class="result win">Ganó ${m.p1_name}</span>`;
-          else if (res === 'black') statusHTML = `<span class="result win">Ganó ${m.p2_name}</span>`;
-          else if (res === 'draw') statusHTML = `<span class="result draw">Tablas</span>`;
-
+          const p = matchResultFor(r, m.p1_name, m.p2_name);
           const row = document.createElement('div');
           row.className = 'match-row';
-          const wa1 = waLink(m.p1_whatsapp);
-          const wa2 = waLink(m.p2_whatsapp);
+
+          const w1 = waLink(m.p1_whatsapp);
+          const w2 = waLink(m.p2_whatsapp);
+
+          const g1 = p?.game1 || '—', g2 = p?.game2 || '—', g3 = p?.game3 || '—';
+          const resText = p?.result ? (p.result==='white' ? `Ganó ${m.p1_name}` : p.result==='black' ? `Ganó ${m.p2_name}` : 'Tablas') : 'Pendiente';
+
           row.innerHTML = `
-            <div class="names"><i class="fa-regular fa-chess-king"></i> ${m.p1_name}</div>
+            <div class="names">
+              ${w1 ? `<a class="btn" target="_blank" rel="noopener" href="${w1}"><i class="fa-brands fa-whatsapp"></i></a>` : ''}
+              <span>${m.p1_name}</span>
+            </div>
             <div class="muted">vs</div>
-            <div class="names">${m.p2_name} <i class="fa-regular fa-chess-queen"></i></div>
-            <div class="status">${statusHTML}</div>
-            ${wa1 ? `<a class="btn" target="_blank" rel="noopener" href="${wa1}"><i class="fa-brands fa-whatsapp"></i> ${m.p1_name.split(' ')[0]}</a>`:''}
-            <div></div>
-            ${wa2 ? `<a class="btn" target="_blank" rel="noopener" href="${wa2}"><i class="fa-brands fa-whatsapp"></i> ${m.p2_name.split(' ')[0]}</a>`:''}
-            <div></div>
+            <div class="names">
+              <span>${m.p2_name}</span>
+              ${w2 ? `<a class="btn" target="_blank" rel="noopener" href="${w2}"><i class="fa-brands fa-whatsapp"></i></a>` : ''}
+            </div>
+            <div class="status">
+              <div class="muted">J1: <strong>${g1}</strong> • J2: <strong>${g2}</strong> • J3: <strong>${g3}</strong></div>
+              <div>${resText}</div>
+            </div>
           `;
+
           list.appendChild(row);
         });
 
@@ -155,30 +158,11 @@
       });
     }
 
-    onValue(ref(db,'calendario'), snap => {
-      calendario = snap.val() || {};
-      render();
-    });
+    onValue(ref(db,'calendario'), snap => { calendario = snap.val() || {}; render(); });
+    onValue(ref(db,'pairings'), snap => { const obj = snap.val() || {}; pairings = Object.values(obj); render(); });
 
-    onValue(ref(db,'pairings'), snap => {
-      const obj = snap.val() || {};
-      pairings = Object.values(obj);
-      render();
-    });
-
-    Q.addEventListener('input', () => {
-      filtro = Q.value.trim();
-      SHARE.href = `?player=${encodeURIComponent(filtro)}`;
-      render();
-    });
-    BTN_CLEAR.addEventListener('click', () => {
-      Q.value = '';
-      filtro = '';
-      SHARE.href = `?player=`;
-      render();
-    });
-
-    // para compartir link directo del jugador cargado por parámetro
+    Q.addEventListener('input', () => { filtro = Q.value.trim(); SHARE.href = `?player=${encodeURIComponent(filtro)}`; render(); });
+    BTN_CLEAR.addEventListener('click', () => { Q.value = ''; filtro = ''; SHARE.href = `?player=`; render(); });
     SHARE.href = `?player=${encodeURIComponent(Q.value||'')}`;
   </script>
 </body>
