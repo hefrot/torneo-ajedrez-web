@@ -205,6 +205,90 @@
             color: var(--warning); border: 1px solid rgba(251, 191, 36, 0.3);
         }
         
+        /* NUEVO: Lista de pendientes */
+        .pending-players-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .pending-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--warning);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .pending-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .pending-player-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--warning);
+            border-radius: 999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /* NUEVO: Mensaje motivacional */
+        .motivational-message {
+            margin-top: 1rem;
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(239, 68, 68, 0.1));
+            border: 2px solid var(--warning);
+            border-radius: var(--border-radius);
+            text-align: center;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--warning);
+            animation: shake 0.5s ease-in-out infinite;
+        }
+        
+        /* NUEVO: Animación de urgencia */
+        .progress-card.urgent {
+            animation: urgentPulse 2s ease-in-out infinite;
+            border-color: var(--danger);
+        }
+        .progress-card.urgent .progress-title {
+            color: var(--danger);
+        }
+        .card.pending.urgent {
+            animation: urgentShake 0.5s ease-in-out infinite;
+            border-left-color: var(--danger);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        @keyframes urgentPulse {
+            0%, 100% { box-shadow: var(--shadow-glow); }
+            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); }
+        }
+        
+        @keyframes urgentShake {
+            0%, 100% { transform: translateY(0); }
+            25% { transform: translateY(-2px); }
+            75% { transform: translateY(2px); }
+        }
+        
         .loading { display: flex; flex-direction: column; align-items: center; padding: 3rem; gap: 1rem; }
         .spinner {
             width: 48px; height: 48px; border: 4px solid var(--bg-card);
@@ -266,6 +350,18 @@
                     <span id="progress-text-inside"></span>
                 </div>
                 <div class="progress-bar-text" id="progress-text-outside"></div>
+            </div>
+            
+            <!-- NUEVO: Mensaje motivacional -->
+            <div id="motivational-message" class="motivational-message" style="display: none;"></div>
+            
+            <!-- NUEVO: Lista de jugadores pendientes -->
+            <div id="pending-players-section" class="pending-players-section" style="display: none;">
+                <div class="pending-title">
+                    <i class="fas fa-user-clock"></i>
+                    Jugadores que aún no reportan:
+                </div>
+                <div id="pending-list" class="pending-list"></div>
             </div>
         </div>
 
@@ -428,12 +524,13 @@
 
                 if (!partidos) {
                     container.innerHTML = '<div class="empty-state"><i class="fas fa-chess-board" style="font-size: 3rem; margin-bottom: 1rem;"></i><p>No hay pareos publicados para esta ronda</p></div>';
-                    updateProgress(0, 0);
+                    updateProgress(0, 0, []);
                     return;
                 }
 
                 let completedCount = 0;
                 let totalCount = 0;
+                let pendingMatches = [];
 
                 let html = '<div class="cards-grid">';
                 Object.entries(partidos).forEach(([id, partido]) => {
@@ -443,15 +540,26 @@
 
                     totalCount++;
                     const isCompleted = partido.resultado && partido.juegos;
-                    if (isCompleted) completedCount++;
+                    if (isCompleted) {
+                        completedCount++;
+                    } else {
+                        // Guardar info de partidos pendientes
+                        pendingMatches.push({
+                            player1: j1.nombre,
+                            player2: j2.nombre
+                        });
+                    }
 
                     const r1 = j1.eloActual ?? j1.elo ?? 1000;
                     const r2 = j2.eloActual ?? j2.elo ?? 1000;
                     const flag1 = getFlag(j1.whatsapp);
                     const flag2 = getFlag(j2.whatsapp);
 
+                    // Determinar si es urgente (menos de 3 partidos pendientes)
+                    const isUrgent = (totalCount - completedCount) <= 3 && !isCompleted;
+
                     html += `
-                        <div class="card ${isCompleted ? 'completed' : 'pending'}">
+                        <div class="card ${isCompleted ? 'completed' : 'pending'} ${isUrgent ? 'urgent' : ''}">
                             <div class="status-badge ${isCompleted ? 'completed' : 'pending'}">
                                 ${isCompleted ? '✅ Jugado' : '⏳ Pendiente'}
                             </div>
@@ -485,12 +593,12 @@
                 container.innerHTML = html;
 
                 // Actualizar tarjeta de progreso
-                updateProgress(completedCount, totalCount);
+                updateProgress(completedCount, totalCount, pendingMatches);
             }, { onlyOnce: true });
         }
 
-        // NUEVA FUNCIÓN: Actualizar progreso
-        function updateProgress(completed, total) {
+        // FUNCIÓN MEJORADA: Actualizar progreso con mensajes y lista de pendientes
+        function updateProgress(completed, total, pendingMatches) {
             const pending = total - completed;
             const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -502,6 +610,10 @@
             const progressBar = document.getElementById('progress-bar');
             const progressTextInside = document.getElementById('progress-text-inside');
             const progressTextOutside = document.getElementById('progress-text-outside');
+            const progressCard = document.getElementById('progress-section');
+            const motivationalMessage = document.getElementById('motivational-message');
+            const pendingSection = document.getElementById('pending-players-section');
+            const pendingList = document.getElementById('pending-list');
 
             progressBar.style.width = `${percentage}%`;
 
@@ -511,6 +623,69 @@
             } else {
                 progressTextInside.textContent = '';
                 progressTextOutside.textContent = `${completed}/${total} partidos`;
+            }
+
+            // ACTIVAR MODO URGENTE si quedan 3 o menos partidos
+            if (pending > 0 && pending <= 3) {
+                progressCard.classList.add('urgent');
+            } else {
+                progressCard.classList.remove('urgent');
+            }
+
+            // MOSTRAR MENSAJE MOTIVACIONAL según el progreso
+            if (pending === 0 && total > 0) {
+                motivationalMessage.style.display = 'block';
+                motivationalMessage.innerHTML = '🎉 ¡RONDA COMPLETADA! Todos los partidos han sido reportados 🎉';
+                motivationalMessage.style.borderColor = 'var(--success)';
+                motivationalMessage.style.color = 'var(--success)';
+                motivationalMessage.style.animation = 'none';
+                pendingSection.style.display = 'none';
+            } else if (pending === 1) {
+                motivationalMessage.style.display = 'block';
+                motivationalMessage.innerHTML = '🔥 ¡ÚLTIMO PARTIDO! Solo falta 1 enfrentamiento por reportar 🔥';
+                motivationalMessage.style.borderColor = 'var(--danger)';
+                motivationalMessage.style.color = 'var(--danger)';
+                motivationalMessage.style.animation = 'shake 0.5s ease-in-out infinite';
+            } else if (pending === 2) {
+                motivationalMessage.style.display = 'block';
+                motivationalMessage.innerHTML = '⚡ ¡CASI TERMINAMOS! Solo quedan 2 partidos pendientes ⚡';
+                motivationalMessage.style.borderColor = 'var(--danger)';
+                motivationalMessage.style.color = 'var(--danger)';
+                motivationalMessage.style.animation = 'shake 0.5s ease-in-out infinite';
+            } else if (pending === 3) {
+                motivationalMessage.style.display = 'block';
+                motivationalMessage.innerHTML = '⏰ ¡ATENCIÓN! Solo quedan 3 partidos sin reportar ⏰';
+                motivationalMessage.style.borderColor = 'var(--warning)';
+                motivationalMessage.style.color = 'var(--warning)';
+                motivationalMessage.style.animation = 'pulse 2s ease-in-out infinite';
+            } else if (pending > 0 && pending <= total / 2) {
+                motivationalMessage.style.display = 'block';
+                motivationalMessage.innerHTML = `📢 ¡Ya vamos a la mitad! Quedan ${pending} partidos por reportar 📢`;
+                motivationalMessage.style.borderColor = 'var(--accent-primary)';
+                motivationalMessage.style.color = 'var(--accent-primary)';
+                motivationalMessage.style.animation = 'none';
+            } else {
+                motivationalMessage.style.display = 'none';
+            }
+
+            // MOSTRAR LISTA DE JUGADORES PENDIENTES
+            if (pendingMatches && pendingMatches.length > 0) {
+                pendingSection.style.display = 'block';
+                pendingList.innerHTML = '';
+                
+                pendingMatches.forEach(match => {
+                    const badge1 = document.createElement('div');
+                    badge1.className = 'pending-player-badge';
+                    badge1.innerHTML = `<i class="fas fa-hourglass-half"></i> ${escapeHtml(match.player1)}`;
+                    pendingList.appendChild(badge1);
+
+                    const badge2 = document.createElement('div');
+                    badge2.className = 'pending-player-badge';
+                    badge2.innerHTML = `<i class="fas fa-hourglass-half"></i> ${escapeHtml(match.player2)}`;
+                    pendingList.appendChild(badge2);
+                });
+            } else {
+                pendingSection.style.display = 'none';
             }
         }
 
