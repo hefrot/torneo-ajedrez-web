@@ -1,8 +1,7 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Calendario • Torneo</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css">
@@ -13,17 +12,11 @@
   <header class="header">
     <div class="header-inner container">
       <div class="logo"></div>
-      <div class="title">
-        <div class="badge">Calendario</div>
-        <h1 class="title">Ronda <span id="calTitle">1</span></h1>
-      </div>
+      <div class="title"><div class="badge">Calendario</div><h1 class="title">Ronda <span id="calTitle">1</span></h1></div>
       <div class="header-stats">
         <a class="pill" href="./index.html"><i class="fa-solid fa-house"></i> <span>Inicio</span></a>
         <a class="pill" href="./reportar.html"><i class="fa-solid fa-pen-to-square"></i> <span>Reportar</span></a>
-        <div class="pill countdown-pulse" id="pillCountdown">
-          <i class="fa-regular fa-hourglass-half"></i>
-          <span>Termina en:</span> <strong id="countdown">—</strong>
-        </div>
+        <div class="pill countdown-pulse"><i class="fa-regular fa-hourglass-half"></i><span>Termina en:</span> <strong id="countdown">—</strong></div>
       </div>
       <nav style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
         <a class="pill" id="btnPrev">⟵ Anterior</a>
@@ -32,102 +25,23 @@
       </nav>
     </div>
   </header>
-
-  <main class="container">
-    <section class="section">
-      <div id="pairingsGrid" class="grid"></div>
-    </section>
-  </main>
-
+  <main class="container"><section class="section"><div id="pairingsGrid" class="grid"></div></section></main>
   <script type="module">
     import { firebaseConfig } from './firebase-config.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
-
-    const app = initializeApp(firebaseConfig);
-    const db  = getDatabase(app);
-
-    const grid = document.getElementById('pairingsGrid');
-    const title= document.getElementById('calTitle');
-    const sel  = document.getElementById('roundSelect');
-    const prev = document.getElementById('btnPrev');
-    const next = document.getElementById('btnNext');
-    const EL   = document.getElementById('countdown');
-
+    const app = initializeApp(firebaseConfig); const db=getDatabase(app);
+    const grid=document.getElementById('pairingsGrid'); const title=document.getElementById('calTitle'); const sel=document.getElementById('roundSelect'); const prev=document.getElementById('btnPrev'); const next=document.getElementById('btnNext'); const EL=document.getElementById('countdown');
     let calendario={}, roundsIdx=[], currentRound=1, schedule={}, autoAdvance=false, timer=null;
-
-    function formatHMS(ms){
-      if(ms<=0) return '00:00:00';
-      const s=Math.floor(ms/1000);
-      const hh=String(Math.floor(s/3600)).padStart(2,'0');
-      const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
-      const ss=String(s%60).padStart(2,'0');
-      return `${hh}:${mm}:${ss}`;
-    }
-    function paintCountdown(){
-      const end = schedule[String(currentRound)]?.endAt;
-      if(!end){ EL.textContent='—'; return; }
-      const remain = end - Date.now();
-      EL.textContent = formatHMS(remain);
-      if(remain<=0){
-        clearInterval(timer); timer=null;
-        EL.textContent='CERRADA';
-        if(autoAdvance && schedule[String(currentRound+1)]){
-          update(ref(db,'tournament'), { currentRound: currentRound+1 }).catch(console.error);
-        }
-      }
-    }
-
-    function renderRound(r){
-      const key = `ronda${r}`;
-      const list = calendario[key] || [];
-      title.textContent = r;
-      grid.innerHTML='';
-      if(!list.length){
-        const empty=document.createElement('div'); empty.className='badge'; empty.textContent='No hay partidas para esta ronda';
-        grid.appendChild(empty); return;
-      }
-      list.forEach(m=>{
-        const card=document.createElement('div'); card.className='card pairing fadein';
-        card.innerHTML = `
-          <div class="card-header">
-            <div><strong>Ronda ${r}</strong></div>
-            <div class="badge">${m.date || 'Fecha por definir'}</div>
-          </div>
-          <div class="card-body">
-            <div class="players-row">
-              <div>${m.p1_name}</div>
-              <div class="vs">VS</div>
-              <div>${m.p2_name}</div>
-            </div>
-            <div class="badge">J1: — • J2: — • J3: —</div>
-          </div>`;
-        grid.appendChild(card);
-      });
-      if(timer){ clearInterval(timer); timer=null; }
-      paintCountdown(); timer=setInterval(paintCountdown,1000);
-    }
-
-    function syncSelect(){
-      sel.innerHTML = roundsIdx.map(r=>`<option value="${r}">Ronda ${r}</option>`).join('');
-      sel.value = String(currentRound);
-    }
-
+    const fmt=(ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000); const hh=String(Math.floor(s/3600)).padStart(2,'0'); const mm=String(Math.floor((s%3600)/60)).padStart(2,'0'); const ss=String(s%60).padStart(2,'0'); return `${hh}:${mm}:${ss}`; };
+    function paintCountdown(){ const end=schedule[String(currentRound)]?.endAt; if(!end){EL.textContent='—'; return;} const remain=end-Date.now(); EL.textContent=fmt(remain); if(remain<=0){ clearInterval(timer); timer=null; EL.textContent='CERRADA'; if(autoAdvance && schedule[String(currentRound+1)]){ update(ref(db,'tournament'), { currentRound: currentRound+1 }).catch(console.error); } } }
+    function renderRound(r){ const key=`ronda${r}`; const list=calendario[key]||[]; title.textContent=r; grid.innerHTML=''; if(!list.length){ const empty=document.createElement('div'); empty.className='badge'; empty.textContent='No hay partidas para esta ronda'; grid.appendChild(empty); return; } list.forEach(m=>{ const card=document.createElement('div'); card.className='card pairing fadein'; card.innerHTML=`<div class="card-header"><div><strong>Ronda ${r}</strong></div><div class="badge">${m.date||'Fecha por definir'}</div></div><div class="card-body"><div class="players-row"><div>${m.p1_name}</div><div class="vs">VS</div><div>${m.p2_name}</div></div><div class="badge">J1: — • J2: — • J3: —</div></div>`; grid.appendChild(card); }); if(timer){clearInterval(timer); timer=null;} paintCountdown(); timer=setInterval(paintCountdown,1000); }
+    function syncSelect(){ sel.innerHTML=roundsIdx.map(r=>`<option value="${r}">Ronda ${r}</option>`).join(''); sel.value=String(currentRound); }
     sel.addEventListener('change',()=>{ currentRound=Number(sel.value); renderRound(currentRound); });
     prev.addEventListener('click',()=>{ const i=roundsIdx.indexOf(currentRound); if(i>0){ currentRound=roundsIdx[i-1]; sel.value=currentRound; renderRound(currentRound);} });
     next.addEventListener('click',()=>{ const i=roundsIdx.indexOf(currentRound); if(i<roundsIdx.length-1){ currentRound=roundsIdx[i+1]; sel.value=currentRound; renderRound(currentRound);} });
-
-    onValue(ref(db,'tournament'), s=>{
-      const t=s.val()||{};
-      currentRound = Number(t.currentRound||1);
-      schedule = t.rounds || {}; autoAdvance=!!t.autoAdvance;
-      syncSelect(); renderRound(currentRound);
-    });
-    onValue(ref(db,'calendario'), s=>{
-      calendario = s.val()||{};
-      roundsIdx = Object.keys(calendario).filter(k=>/^ronda\d+$/i.test(k)).map(k=>Number(k.replace(/\D/g,''))).sort((a,b)=>a-b);
-      syncSelect(); renderRound(currentRound);
-    });
+    onValue(ref(db,'tournament'), s=>{ const t=s.val()||{}; currentRound=Number(t.currentRound||1); schedule=t.rounds||{}; autoAdvance=!!t.autoAdvance; syncSelect(); renderRound(currentRound); });
+    onValue(ref(db,'calendario'), s=>{ calendario=s.val()||{}; roundsIdx=Object.keys(calendario).filter(k=>/^ronda\d+$/i.test(k)).map(k=>Number(k.replace(/\D/g,''))).sort((a,b)=>a-b); syncSelect(); renderRound(currentRound); });
   </script>
 </body>
 </html>

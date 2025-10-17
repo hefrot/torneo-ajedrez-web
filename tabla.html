@@ -1,127 +1,42 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tabla General • Torneo de Ajedrez</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tabla de Posiciones • Torneo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
   <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
+  <style>table{width:100%;border-collapse:separate;border-spacing:0 10px}th,td{padding:10px 12px;text-align:left}thead th{font-weight:600;color:var(--muted)}tbody tr{background:rgba(21,29,47,.7);border:1px solid var(--line)}tbody tr td:first-child{border-radius:12px 0 0 12px}tbody tr td:last-child{border-radius:0 12px 12px 0}</style>
 </head>
 <body>
   <header class="header">
     <div class="header-inner container">
-      <h1 class="title">🏆 Tabla General del Torneo</h1>
-      <div class="header-stats">
-        <a class="pill" href="./index.html"><i class="fa-solid fa-ranking-star"></i> Ranking</a>
-        <a class="pill" href="./calendario.html"><i class="fa-solid fa-calendar-days"></i> Calendario</a>
-        <a class="pill" href="./reportar.html"><i class="fa-solid fa-square-poll-vertical"></i> Reportar</a>
+      <div class="logo"></div>
+      <div class="title"><div class="badge">Tabla</div><h1 class="title">Tabla de posiciones</h1></div>
+      <div class="header-stats" style="margin-left:auto">
+        <a class="pill" href="./index.html"><i class="fa-solid fa-house"></i> <span>Inicio</span></a>
+        <a class="pill" href="./calendario.html"><i class="fa-solid fa-calendar"></i> <span>Calendario</span></a>
+        <a class="pill" href="./reportar.html"><i class="fa-solid fa-pen-to-square"></i> <span>Reportar</span></a>
       </div>
     </div>
   </header>
-
   <main class="container">
     <section class="section">
-      <h2>Tabla completa de jugadores</h2>
-      <p>Consulta todos los jugadores, puntos acumulados, ELO actual y rendimiento en el torneo.</p>
-      <div class="table-container">
-        <table id="tablaRanking" class="ranking-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Jugador</th>
-              <th>País</th>
-              <th>ELO</th>
-              <th>Puntos</th>
-              <th>Partidas</th>
-              <th>% Rendimiento</th>
-              <th>ELO Perf</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <button id="btnExport" class="btn">📄 Exportar CSV</button>
-      </div>
+      <table>
+        <thead><tr><th>#</th><th>Jugador</th><th>ELO</th><th>Juegos</th><th>G</th><th>E</th><th>P</th><th>Puntos (3/1/0)</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
     </section>
   </main>
-
-  <footer class="footer">
-    <div class="container">Datos en tiempo real desde Firebase — Capital Investor League ♟️</div>
-  </footer>
-
   <script type="module">
     import { firebaseConfig } from './firebase-config.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    const tbody = document.querySelector("#tablaRanking tbody");
-    const btnExport = document.getElementById("btnExport");
-
-    function pts(p){ return (p.wins||0)*3 + (p.draws||0); }
-
-    function rendimiento(p){
-      const total = (p.games||0)*3;
-      return total ? ((pts(p)/total)*100).toFixed(1) : "0.0";
-    }
-
-    function eloPerf(p){
-      const base = Number(p.rating||1200);
-      return (base + (pts(p)*5)).toFixed(0);
-    }
-
-    function sortPlayers(arr){
-      return arr.sort((a,b)=>{
-        const pa = pts(a), pb = pts(b);
-        if(pb!==pa) return pb-pa;
-        return (b.rating||0)-(a.rating||0);
-      });
-    }
-
-    onValue(ref(db,'jugadores'), snap=>{
-      const jugadores = snap.val()||{};
-      const list = Object.entries(jugadores).map(([id,p])=>({
-        name: p.nombre || p.name || 'Jugador',
-        pais: p.pais || '',
-        rating: Number(p.eloActual ?? p.elo ?? 1000),
-        wins: Number(p.wins||0),
-        draws: Number(p.draws||0),
-        losses: Number(p.losses||0),
-        games: Number(p.games||0)
-      }));
-      const sorted = sortPlayers(list);
-      tbody.innerHTML = '';
-      sorted.forEach((p,i)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${i+1}</td>
-          <td>${p.name}</td>
-          <td>${p.pais||'—'}</td>
-          <td>${p.rating}</td>
-          <td>${pts(p)}</td>
-          <td>${p.games}</td>
-          <td>${rendimiento(p)}%</td>
-          <td>${eloPerf(p)}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    });
-
-    btnExport.addEventListener('click', ()=>{
-      let csv = "Rank,Jugador,País,ELO,Puntos,Partidas,% Rendimiento,ELO Perf\n";
-      document.querySelectorAll("#tablaRanking tbody tr").forEach(row=>{
-        const cols = Array.from(row.children).map(td=>td.textContent);
-        csv += cols.join(",") + "\n";
-      });
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'tabla_general_torneo.csv';
-      a.click();
-    });
+    const app=initializeApp(firebaseConfig); const db=getDatabase(app); const ROWS=document.getElementById('rows');
+    const pts=p=>((p.wins||0)*3+(p.draws||0));
+    function sortPlayers(arr){ return arr.slice().sort((a,b)=>{ const pa=pts(a), pb=pts(b); if(pb!==pa) return pb-pa; if((b.wins||0)!==(a.wins||0)) return (b.wins||0)-(a.wins||0); if((b.rating||0)!==(a.rating||0)) return (b.rating||0)-(a.rating||0); return (a.name||'').localeCompare(b.name||''); }); }
+    function mapJugador([id,p]){ return { id, name: p.nombre||p.name||p.nombreCompleto||("Jugador "+String(id).slice(-4)), rating:Number(p.eloActual??p.elo??1000), wins:Number(p.wins??0), draws:Number(p.draws??0), losses:Number(p.losses??0), games:Number(p.games??0) }; }
+    onValue(ref(db,'jugadores'), s=>{ const list=Object.entries(s.val()||{}).map(mapJugador); const sorted=sortPlayers(list); ROWS.innerHTML=sorted.map((p,i)=>`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.rating||'-'}</td><td>${p.games||0}</td><td>${p.wins||0}</td><td>${p.draws||0}</td><td>${p.losses||0}</td><td>${pts(p)}</td></tr>`).join(''); });
   </script>
 </body>
 </html>
