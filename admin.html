@@ -204,11 +204,11 @@
                 </div>
                 <div class="form-group">
                     <label>Puntos</label>
-                    <input type="number" id="edit-puntos" min="0" required>
+                    <input type="number" id="edit-puntos" readonly>
                 </div>
                 <div class="form-group">
                     <label>Rondas Jugadas</label>
-                    <input type="number" id="edit-games" min="0" required>
+                    <input type="number" id="edit-games" readonly>
                 </div>
                 <div class="form-group">
                     <label>Partidas Jugadas (Total)</label>
@@ -377,21 +377,30 @@
             container.innerHTML = html;
         }
         
+        const editPuntosInput = document.getElementById('edit-puntos');
+        const editGamesInput = document.getElementById('edit-games');
         const editWinsInput = document.getElementById('edit-wins');
         const editDrawsInput = document.getElementById('edit-draws');
         const editLossesInput = document.getElementById('edit-losses');
         const editTotalGamesInput = document.getElementById('edit-total-games');
 
-        function updateTotalGames() {
+        function updateCalculatedFields() {
             const wins = parseInt(editWinsInput.value) || 0;
             const draws = parseInt(editDrawsInput.value) || 0;
             const losses = parseInt(editLossesInput.value) || 0;
-            editTotalGamesInput.value = wins + draws + losses;
+            
+            const totalGames = wins + draws + losses;
+            const totalRounds = Math.floor(totalGames / 3);
+            const totalPoints = (wins * 3) + (draws * 1);
+
+            editTotalGamesInput.value = totalGames;
+            editGamesInput.value = totalRounds;
+            editPuntosInput.value = totalPoints;
         }
 
-        editWinsInput.addEventListener('input', updateTotalGames);
-        editDrawsInput.addEventListener('input', updateTotalGames);
-        editLossesInput.addEventListener('input', updateTotalGames);
+        editWinsInput.addEventListener('input', updateCalculatedFields);
+        editDrawsInput.addEventListener('input', updateCalculatedFields);
+        editLossesInput.addEventListener('input', updateCalculatedFields);
 
         window.openEditModal = async function(playerId) {
             currentEditingPlayerId = playerId;
@@ -399,12 +408,10 @@
             if (snapshot.exists()) {
                 const player = snapshot.val();
                 document.getElementById('edit-name').value = player.nombre || '';
-                document.getElementById('edit-puntos').value = player.puntos || 0;
-                document.getElementById('edit-games').value = player.games || 0;
                 document.getElementById('edit-wins').value = player.wins || 0;
                 document.getElementById('edit-draws').value = player.draws || 0;
                 document.getElementById('edit-losses').value = player.losses || 0;
-                updateTotalGames(); // Calculate total games on open
+                updateCalculatedFields(); // Calculate all fields on open
                 document.getElementById('edit-modal').classList.add('active');
             }
         }
@@ -417,16 +424,21 @@
         document.getElementById('edit-player-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!currentEditingPlayerId) return;
+
+            // Recalculate just in case before saving
+            updateCalculatedFields();
+
             const puntos = parseInt(document.getElementById('edit-puntos').value);
-            // 'games' se refiere a las Rondas jugadas
             const games = parseInt(document.getElementById('edit-games').value); 
             const wins = parseInt(document.getElementById('edit-wins').value);
             const draws = parseInt(document.getElementById('edit-draws').value);
             const losses = parseInt(document.getElementById('edit-losses').value);
+            
             try {
                 await update(ref(db, `jugadores/${currentEditingPlayerId}`), {
+                    nombre: document.getElementById('edit-name').value,
                     puntos: puntos,
-                    games: games, // Esto actualiza las Rondas
+                    games: games, // Rondas
                     wins: wins,
                     draws: draws,
                     losses: losses,
