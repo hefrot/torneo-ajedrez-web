@@ -407,8 +407,8 @@
             }));
 
             jugadoresArray.sort((a, b) => {
-                if (b.puntos !== a.puntos) return b.puntos - a.puntos;
-                if (b.wins !== a.wins) return b.wins - a.wins;
+                if ((b.puntos || 0) !== (a.puntos || 0)) return (b.puntos || 0) - (a.puntos || 0);
+                if ((b.wins || 0) !== (a.wins || 0)) return (b.wins || 0) - (a.wins || 0);
                 const ratingA = a.eloActual ?? a.elo ?? 1000;
                 const ratingB = b.eloActual ?? b.elo ?? 1000;
                 return ratingB - ratingA;
@@ -427,6 +427,7 @@
                 const rankClass = rank === 1 ? 'top-1' : rank === 2 ? 'top-2' : rank === 3 ? 'top-3' : '';
                 const rating = j.eloActual ?? j.elo ?? 1000;
                 const flag = getFlag(j.whatsapp);
+                const totalGames = (j.wins || 0) + (j.draws || 0) + (j.losses || 0);
 
                 html += `
                     <div class="card player-card">
@@ -446,7 +447,7 @@
                                 </span>
                                 <span class="player-detail">
                                     <i class="fas fa-chess" style="color: var(--text-muted);"></i>
-                                    ${j.games || 0}G/${j.wins || 0}V/${j.draws || 0}E/${j.losses || 0}D
+                                    ${j.games || 0}R / ${totalGames}PJ / ${j.wins || 0}V / ${j.draws || 0}E / ${j.losses || 0}D
                                 </span>
                             </div>
                         </div>
