@@ -386,14 +386,14 @@
                         previousResult.jugador1Puntos || 0,
                         previousResult.jugador1Wins || 0,
                         previousResult.empates || 0,
-                        previousResult.jugador2Wins || 0 // Las pérdidas de J1 son las victorias de J2
+                        previousResult.jugador2Wins || 0 
                     );
                     await revertPlayerPoints(
                         currentPairing.jugador2,
                         previousResult.jugador2Puntos || 0,
                         previousResult.jugador2Wins || 0,
                         previousResult.empates || 0,
-                        previousResult.jugador1Wins || 0 // Las pérdidas de J2 son las victorias de J1
+                        previousResult.jugador1Wins || 0
                     );
                 }
 
@@ -453,6 +453,7 @@
             }
         }
 
+        // ✅ FUNCIÓN CORREGIDA: Actualizar puntos del jugador
         async function updatePlayerPoints(playerId, points, wins, draws, losses) {
             try {
                 const playerRef = ref(db, `jugadores/${playerId}`);
@@ -460,7 +461,7 @@
                     if (!player) return player;
                     
                     const newPuntos = (player.puntos || 0) + points;
-                    const newGames = (player.games || 0) + 3;
+                    const newGames = (player.games || 0) + 1; // Suma 1 ronda
                     const newWins = (player.wins || 0) + wins;
                     const newDraws = (player.draws || 0) + draws;
                     const newLosses = (player.losses || 0) + losses;
@@ -481,13 +482,14 @@
                         ultimaActualizacion: Date.now()
                     };
                 });
-                console.log(`✅ Jugador ${playerId}: +${points} puntos (${wins}G/${draws}E/${losses}P)`);
+                console.log(`✅ Jugador ${playerId}: +${points} puntos (${wins}G/${draws}E/${losses}D)`);
             } catch (error) {
                 console.error('❌ Error al actualizar jugador:', playerId, error);
                 throw error;
             }
         }
 
+        // ✅ FUNCIÓN CORREGIDA: Revertir puntos (para ediciones)
         async function revertPlayerPoints(playerId, points, wins, draws, losses) {
             try {
                 const playerRef = ref(db, `jugadores/${playerId}`);
@@ -495,7 +497,7 @@
                     if (!player) return player;
                     
                     const newPuntos = Math.max((player.puntos || 0) - points, 0);
-                    const newGames = Math.max((player.games || 0) - 3, 0);
+                    const newGames = Math.max((player.games || 0) - 1, 0); // Resta 1 ronda
                     const newWins = Math.max((player.wins || 0) - wins, 0);
                     const newDraws = Math.max((player.draws || 0) - draws, 0);
                     const newLosses = Math.max((player.losses || 0) - losses, 0);
