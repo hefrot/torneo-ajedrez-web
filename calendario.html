@@ -54,7 +54,7 @@
         }
         .section-icon { font-size: 1.5rem; color: var(--accent-primary); }
         
-        /* NUEVO: Tarjeta de progreso */
+        /* Tarjeta de progreso */
         .progress-card {
             background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
             border: 2px solid var(--accent-primary); border-radius: var(--border-radius);
@@ -151,7 +151,7 @@
         .card:hover { transform: translateY(-4px); background: var(--bg-card-hover); border-color: var(--accent-primary); box-shadow: var(--shadow-lg), var(--shadow-glow); }
         .card:hover::before { transform: scaleX(1); }
         
-        /* NUEVO: Estados de partido */
+        /* Estados de partido */
         .card.completed {
             border-left: 4px solid var(--success);
             background: linear-gradient(90deg, rgba(52, 211, 153, 0.05) 0%, var(--bg-card) 100%);
@@ -189,7 +189,7 @@
         .social-link.lichess { border-color: var(--text-secondary); }
         .social-link.lichess:hover { border-color: #fff; color: #fff; }
         
-        /* NUEVO: Badge de estado */
+        /* Badge de estado */
         .status-badge {
             position: absolute; top: 1rem; right: 1rem;
             padding: 0.25rem 0.75rem; border-radius: 999px;
@@ -205,7 +205,7 @@
             color: var(--warning); border: 1px solid rgba(251, 191, 36, 0.3);
         }
         
-        /* NUEVO: Lista de pendientes */
+        /* Lista de pendientes */
         .pending-players-section {
             margin-top: 1.5rem;
             padding-top: 1.5rem;
@@ -239,56 +239,6 @@
             animation: pulse 2s ease-in-out infinite;
         }
         
-        /* NUEVO: Mensaje motivacional */
-        .motivational-message {
-            margin-top: 1rem;
-            padding: 1rem 1.5rem;
-            background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(239, 68, 68, 0.1));
-            border: 2px solid var(--warning);
-            border-radius: var(--border-radius);
-            text-align: center;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 1.125rem;
-            font-weight: 700;
-            color: var(--warning);
-            animation: shake 0.5s ease-in-out infinite;
-        }
-        
-        /* NUEVO: Animación de urgencia */
-        .progress-card.urgent {
-            animation: urgentPulse 2s ease-in-out infinite;
-            border-color: var(--danger);
-        }
-        .progress-card.urgent .progress-title {
-            color: var(--danger);
-        }
-        .card.pending.urgent {
-            animation: urgentShake 0.5s ease-in-out infinite;
-            border-left-color: var(--danger);
-        }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.05); opacity: 0.8; }
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-        
-        @keyframes urgentPulse {
-            0%, 100% { box-shadow: var(--shadow-glow); }
-            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); }
-        }
-        
-        @keyframes urgentShake {
-            0%, 100% { transform: translateY(0); }
-            25% { transform: translateY(-2px); }
-            75% { transform: translateY(2px); }
-        }
-        
         .loading { display: flex; flex-direction: column; align-items: center; padding: 3rem; gap: 1rem; }
         .spinner {
             width: 48px; height: 48px; border: 4px solid var(--bg-card);
@@ -297,6 +247,10 @@
         .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
         @media (max-width: 768px) {
             .header-title { font-size: 2rem; }
             .container { padding: 2rem 1rem; }
@@ -325,7 +279,6 @@
     </header>
 
     <div class="container">
-        <!-- NUEVO: Tarjeta de progreso -->
         <div id="progress-section" class="progress-card">
             <div class="progress-title">
                 <i class="fas fa-chart-line"></i>
@@ -352,10 +305,6 @@
                 <div class="progress-bar-text" id="progress-text-outside"></div>
             </div>
             
-            <!-- NUEVO: Mensaje motivacional -->
-            <div id="motivational-message" class="motivational-message" style="display: none;"></div>
-            
-            <!-- NUEVO: Lista de jugadores pendientes -->
             <div id="pending-players-section" class="pending-players-section" style="display: none;">
                 <div class="pending-title">
                     <i class="fas fa-user-clock"></i>
@@ -530,7 +479,7 @@
 
                 let completedCount = 0;
                 let totalCount = 0;
-                let pendingMatches = [];
+                const pendingPlayers = new Set(); // Usar un Set para evitar duplicados
 
                 let html = '<div class="cards-grid">';
                 Object.entries(partidos).forEach(([id, partido]) => {
@@ -543,11 +492,9 @@
                     if (isCompleted) {
                         completedCount++;
                     } else {
-                        // Guardar info de partidos pendientes
-                        pendingMatches.push({
-                            player1: j1.nombre,
-                            player2: j2.nombre
-                        });
+                        // Añadir jugadores del partido pendiente al Set
+                        pendingPlayers.add(j1.nombre);
+                        pendingPlayers.add(j2.nombre);
                     }
 
                     const r1 = j1.eloActual ?? j1.elo ?? 1000;
@@ -555,11 +502,8 @@
                     const flag1 = getFlag(j1.whatsapp);
                     const flag2 = getFlag(j2.whatsapp);
 
-                    // Determinar si es urgente (menos de 3 partidos pendientes)
-                    const isUrgent = (totalCount - completedCount) <= 3 && !isCompleted;
-
                     html += `
-                        <div class="card ${isCompleted ? 'completed' : 'pending'} ${isUrgent ? 'urgent' : ''}">
+                        <div class="card ${isCompleted ? 'completed' : 'pending'}">
                             <div class="status-badge ${isCompleted ? 'completed' : 'pending'}">
                                 ${isCompleted ? '✅ Jugado' : '⏳ Pendiente'}
                             </div>
@@ -592,13 +536,12 @@
                 html += '</div>';
                 container.innerHTML = html;
 
-                // Actualizar tarjeta de progreso
-                updateProgress(completedCount, totalCount, pendingMatches);
+                // Actualizar tarjeta de progreso con la lista de jugadores pendientes
+                updateProgress(completedCount, totalCount, Array.from(pendingPlayers));
             }, { onlyOnce: true });
         }
 
-        // FUNCIÓN MEJORADA: Actualizar progreso con mensajes y lista de pendientes
-        function updateProgress(completed, total, pendingMatches) {
+        function updateProgress(completed, total, pendingPlayerNames) {
             const pending = total - completed;
             const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -610,8 +553,6 @@
             const progressBar = document.getElementById('progress-bar');
             const progressTextInside = document.getElementById('progress-text-inside');
             const progressTextOutside = document.getElementById('progress-text-outside');
-            const progressCard = document.getElementById('progress-section');
-            const motivationalMessage = document.getElementById('motivational-message');
             const pendingSection = document.getElementById('pending-players-section');
             const pendingList = document.getElementById('pending-list');
 
@@ -625,64 +566,14 @@
                 progressTextOutside.textContent = `${completed}/${total} partidos`;
             }
 
-            // ACTIVAR MODO URGENTE si quedan 3 o menos partidos
-            if (pending > 0 && pending <= 3) {
-                progressCard.classList.add('urgent');
-            } else {
-                progressCard.classList.remove('urgent');
-            }
-
-            // MOSTRAR MENSAJE MOTIVACIONAL según el progreso
-            if (pending === 0 && total > 0) {
-                motivationalMessage.style.display = 'block';
-                motivationalMessage.innerHTML = '🎉 ¡RONDA COMPLETADA! Todos los partidos han sido reportados 🎉';
-                motivationalMessage.style.borderColor = 'var(--success)';
-                motivationalMessage.style.color = 'var(--success)';
-                motivationalMessage.style.animation = 'none';
-                pendingSection.style.display = 'none';
-            } else if (pending === 1) {
-                motivationalMessage.style.display = 'block';
-                motivationalMessage.innerHTML = '🔥 ¡ÚLTIMO PARTIDO! Solo falta 1 enfrentamiento por reportar 🔥';
-                motivationalMessage.style.borderColor = 'var(--danger)';
-                motivationalMessage.style.color = 'var(--danger)';
-                motivationalMessage.style.animation = 'shake 0.5s ease-in-out infinite';
-            } else if (pending === 2) {
-                motivationalMessage.style.display = 'block';
-                motivationalMessage.innerHTML = '⚡ ¡CASI TERMINAMOS! Solo quedan 2 partidos pendientes ⚡';
-                motivationalMessage.style.borderColor = 'var(--danger)';
-                motivationalMessage.style.color = 'var(--danger)';
-                motivationalMessage.style.animation = 'shake 0.5s ease-in-out infinite';
-            } else if (pending === 3) {
-                motivationalMessage.style.display = 'block';
-                motivationalMessage.innerHTML = '⏰ ¡ATENCIÓN! Solo quedan 3 partidos sin reportar ⏰';
-                motivationalMessage.style.borderColor = 'var(--warning)';
-                motivationalMessage.style.color = 'var(--warning)';
-                motivationalMessage.style.animation = 'pulse 2s ease-in-out infinite';
-            } else if (pending > 0 && pending <= total / 2) {
-                motivationalMessage.style.display = 'block';
-                motivationalMessage.innerHTML = `📢 ¡Ya vamos a la mitad! Quedan ${pending} partidos por reportar 📢`;
-                motivationalMessage.style.borderColor = 'var(--accent-primary)';
-                motivationalMessage.style.color = 'var(--accent-primary)';
-                motivationalMessage.style.animation = 'none';
-            } else {
-                motivationalMessage.style.display = 'none';
-            }
-
-            // MOSTRAR LISTA DE JUGADORES PENDIENTES
-            if (pendingMatches && pendingMatches.length > 0) {
+            if (pendingPlayerNames && pendingPlayerNames.length > 0) {
                 pendingSection.style.display = 'block';
                 pendingList.innerHTML = '';
-                
-                pendingMatches.forEach(match => {
-                    const badge1 = document.createElement('div');
-                    badge1.className = 'pending-player-badge';
-                    badge1.innerHTML = `<i class="fas fa-hourglass-half"></i> ${escapeHtml(match.player1)}`;
-                    pendingList.appendChild(badge1);
-
-                    const badge2 = document.createElement('div');
-                    badge2.className = 'pending-player-badge';
-                    badge2.innerHTML = `<i class="fas fa-hourglass-half"></i> ${escapeHtml(match.player2)}`;
-                    pendingList.appendChild(badge2);
+                pendingPlayerNames.sort().forEach(name => {
+                    const badge = document.createElement('div');
+                    badge.className = 'pending-player-badge';
+                    badge.innerHTML = `<i class="fas fa-hourglass-half"></i> ${escapeHtml(name)}`;
+                    pendingList.appendChild(badge);
                 });
             } else {
                 pendingSection.style.display = 'none';
