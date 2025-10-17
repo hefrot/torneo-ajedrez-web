@@ -68,7 +68,7 @@
                 <i class="fas fa-trophy"></i>
                 Tabla de Posiciones
             </h1>
-            <p class="header-subtitle">Clasificación Completa - Sistema 3/1/0</p>
+            <p class="header-subtitle">Clasificación Completa - 3 Puntos por Juego Ganado</p>
             <div class="nav-links">
                 <a href="index.html" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
                 <a href="calendario.html" class="nav-link"><i class="fas fa-calendar"></i> Calendario</a>
@@ -101,7 +101,7 @@
                         <i class="fas fa-chess"></i> Rating
                     </button>
                     <button class="btn-sort" data-sort="games">
-                        <i class="fas fa-gamepad"></i> Partidas
+                        <i class="fas fa-gamepad"></i> Rondas
                     </button>
                 </div>
             </div>
@@ -183,7 +183,7 @@
                     const ratingA = a.eloActual ?? a.elo ?? 1000;
                     const ratingB = b.eloActual ?? b.elo ?? 1000;
                     return ratingB - ratingA;
-                } else if (currentSort === 'games') {
+                } else if (currentSort === 'games') { // Ordenar por Rondas
                     if (b.games !== a.games) return (b.games || 0) - (a.games || 0);
                     return (b.puntos || 0) - (a.puntos || 0);
                 }
@@ -206,7 +206,8 @@
                                 <th>Jugador</th>
                                 <th class="sortable">Puntos</th>
                                 <th class="sortable">Rating</th>
-                                <th class="sortable">Partidas</th>
+                                <th class="sortable">Rondas</th>
+                                <th class="sortable">Partidas Jugadas</th>
                                 <th class="sortable">Victorias</th>
                                 <th class="sortable">Empates</th>
                                 <th class="sortable">Derrotas</th>
@@ -218,6 +219,7 @@
 
             filtered.forEach((j, idx) => {
                 const rank = idx + 1;
+                const totalGames = (j.wins || 0) + (j.draws || 0) + (j.losses || 0);
                 const rankClass = rank === 1 ? 'top-1' : rank === 2 ? 'top-2' : rank === 3 ? 'top-3' : '';
                 const badgeClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'normal';
                 const rating = j.eloActual ?? j.elo ?? 1000;
@@ -233,11 +235,12 @@
                                 ${flag}
                                 <span>${escapeHtml(j.nombre)}</span>
                             </div>
-                            <div class="record">${j.games || 0} partidas</div>
+                            <div class="record">${j.games || 0} rondas jugadas</div>
                         </td>
                         <td><span class="stat-highlight">${j.puntos || 0}</span></td>
                         <td>${rating}</td>
                         <td>${j.games || 0}</td>
+                        <td>${totalGames}</td>
                         <td><span style="color:var(--success)">${j.wins || 0}</span></td>
                         <td><span style="color:var(--warning)">${j.draws || 0}</span></td>
                         <td><span style="color:var(--danger)">${j.losses || 0}</span></td>
