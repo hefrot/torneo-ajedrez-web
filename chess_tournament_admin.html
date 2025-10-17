@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Torneo de Ajedrez</title>
+    <meta name="description" content="Panel administrativo para gestionar jugadores y pareos del torneo">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Estilos adicionales específicos para admin */
+        .admin-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .admin-section-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1.5rem;
+        }
+        
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .alert-success {
+            background: rgba(52, 211, 153, 0.15);
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            color: var(--success);
+        }
+        
+        .alert-error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+        }
+        
+        .alert-info {
+            background: rgba(96, 165, 250, 0.15);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            color: var(--info);
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #34d399, #10b981);
+            color: white;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 211, 153, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="header-title">
+                <i class="fas fa-shield-alt"></i>
+                Panel de Administración
+            </h1>
+            <p class="header-subtitle">Gestión del Torneo de Ajedrez</p>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="container">
+        <!-- Alertas -->
+        <div id="alerts-container"></div>
+
+        <!-- VOLVER A INICIO -->
+        <div class="mb-4">
+            <a href="index.html" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i>
+                Volver a la Página Principal
+            </a>
+        </div>
+
+        <!-- SECCIÓN: AGREGAR JUGADOR -->
+        <div class="admin-section">
+            <h2 class="admin-section-title">
+                <i class="fas fa-user-plus"></i>
+                Agregar Nuevo Jugador
+            </h2>
+            
+            <form id="add-player-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="player-name" class="form-label">Nombre Completo *</label>
+                        <input 
+                            type="text" 
+                            id="player-name" 
+                            class="form-input" 
+                            placeholder="Ej: Magnus Carlsen"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="player-rating" class="form-label">Rating ELO *</label>
+                        <input 
+                            type="number" 
+                            id="player-rating" 
+                            class="form-input" 
+                            placeholder="Ej: 2850"
+                            min="0"
+                            max="3500"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="player-whatsapp" class="form-label">WhatsApp (opcional)</label>
+                        <input 
+                            type="tel" 
+                            id="player-whatsapp" 
+                            class="form-input" 
+                            placeholder="Ej: +34612345678"
+                        >
+                        <small style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                            Formato: +código_país + número (sin espacios)
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus"></i>
+                        Agregar Jugador
+                    </button>
+                    <button type="reset" class="btn btn-secondary">
+                        <i class="fas fa-eraser"></i>
+                        Limpiar Formulario
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- SECCIÓN: GESTIÓN DE RONDAS -->
+        <div class="admin-section">
+            <h2 class="admin-section-title">
+                <i class="fas fa-layer-group"></i>
+                Gestión de Rondas
+            </h2>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="round-number" class="form-label">Número de Ronda</label>
+                    <input 
+                        type="number" 
+                        id="round-number" 
+                        class="form-input" 
+                        placeholder="Ej: 1"
+                        min="1"
+                        value="1"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="round-date" class="form-label">Fecha de la Ronda</label>
+                    <input 
+                        type="date" 
+                        id="round-date" 
+                        class="form-input"
+                    >
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button id="generate-pairings-btn" class="btn btn-success">
+                    <i class="fas fa-random"></i>
+                    Generar Pareos Automáticos
+                </button>
+                <button id="next-round-btn" class="btn btn-primary">
+                    <i class="fas fa-forward"></i>
+                    Avanzar a Siguiente Ronda
+                </button>
+            </div>
+        </div>
+
+        <!-- SECCIÓN: CREAR PAREO MANUAL -->
+        <div class="admin-section">
+            <h2 class="admin-section-title">
+                <i class="fas fa-handshake"></i>
+                Crear Pareo Manual
+            </h2>
+            
+            <form id="manual-pairing-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="white-player" class="form-label">Jugador con Blancas</label>
+                        <select id="white-player" class="form-input" required>
+                            <option value="">Seleccionar jugador...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="black-player" class="form-label">Jugador con Negras</label>
+                        <select id="black-player" class="form-input" required>
+                            <option value="">Seleccionar jugador...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check"></i>
+                        Crear Pareo
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- SECCIÓN: ACCIONES PELIGROSAS -->
+        <div class="admin-section" style="border-color: var(--danger);">
+            <h2 class="admin-section-title" style="color: var(--danger);">
+                <i class="fas fa-exclamation-triangle"></i>
+                Zona Peligrosa
+            </h2>
+            
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                <i class="fas fa-info-circle"></i>
+                Estas acciones no se pueden deshacer. Úsalas con precaución.
+            </p>
+            
+            <div class="action-buttons">
+                <button id="reset-tournament-btn" class="btn btn-danger">
+                    <i class="fas fa-trash-alt"></i>
+                    Reiniciar Torneo Completo
+                </button>
+                <button id="delete-all-pairings-btn" class="btn btn-danger">
+                    <i class="fas fa-times-circle"></i>
+                    Eliminar Todos los Pareos
+                </button>
+            </div>
+        </div>
+
+        <!-- LISTA DE JUGADORES REGISTRADOS -->
+        <div class="admin-section">
+            <h2 class="admin-section-title">
+                <i class="fas fa-users"></i>
+                Jugadores Registrados
+            </h2>
+            
+            <div id="admin-players-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p class="loading-text">Cargando jugadores...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIREBASE SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        // Tu configuración de Firebase (DEBE SER LA MISMA QUE EN index.html)
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY",
+            authDomain: "TU_AUTH_DOMAIN",
+            databaseURL: "TU_DATABASE_URL",
+            projectId: "TU_PROJECT_ID",
+            storageBucket: "TU_STORAGE_BUCKET",
+            messagingSenderId: "TU_MESSAGING_SENDER_ID",
+            appId: "TU_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        window.firebaseApp = app;
+        window.firebaseDatabase = database;
+    </script>
+    
+    <!-- JAVASCRIPT PARA ADMIN -->
+    <script src="admin.js"></script>
+</body>
+</html>

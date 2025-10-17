@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Torneo Round Robin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;800&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root{--bg-primary:#0a0e1a;--bg-secondary:#151922;--bg-card:#1a1f2e;--bg-card-hover:#202633;--accent-primary:#00d9ff;--accent-secondary:#0099cc;--accent-glow:rgba(0,217,255,0.3);--text-primary:#e8eaed;--text-secondary:#9aa0a6;--text-muted:#5f6368;--success:#34d399;--warning:#fbbf24;--danger:#ef4444;--shadow-sm:0 2px 4px rgba(0,0,0,0.3);--shadow-md:0 4px 12px rgba(0,0,0,0.4);--shadow-lg:0 8px 24px rgba(0,0,0,0.5);--shadow-glow:0 0 20px var(--accent-glow);--border-radius:12px;--border-color:#2d3748}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Open Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.6;min-height:100vh}
+        body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at 20% 50%,rgba(0,217,255,0.03) 0%,transparent 50%),radial-gradient(circle at 80% 80%,rgba(0,153,204,0.03) 0%,transparent 50%);pointer-events:none;z-index:0}
+        .header{position:relative;background:linear-gradient(135deg,var(--bg-secondary) 0%,#1a2332 100%);padding:2rem 0;border-bottom:1px solid var(--border-color);box-shadow:var(--shadow-md);z-index:10}
+        .header-content{max-width:1200px;margin:0 auto;padding:0 2rem;text-align:center}
+        .header-title{font-family:'Montserrat',sans-serif;font-size:2.5rem;font-weight:800;background:linear-gradient(135deg,var(--accent-primary) 0%,var(--accent-secondary) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.5rem}
+        .header-subtitle{font-size:1rem;color:var(--text-secondary);font-weight:300}
+        .nav-links{display:flex;justify-content:center;gap:1rem;margin-top:1.5rem;flex-wrap:wrap}
+        .nav-link{display:inline-flex;align-items:center;gap:0.5rem;padding:0.5rem 1rem;background:var(--bg-card);color:var(--text-primary);text-decoration:none;border-radius:8px;font-size:0.875rem;font-weight:600;border:1px solid var(--border-color);transition:all 0.3s ease}
+        .nav-link:hover{background:var(--bg-card-hover);border-color:var(--accent-primary);transform:translateY(-2px)}
+        .container{position:relative;max-width:1200px;margin:0 auto;padding:3rem 2rem;z-index:1}
+        .section{margin-bottom:3rem;animation:fadeIn 0.6s ease-out}
+        .section-title{font-family:'Montserrat',sans-serif;font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.75rem}
+        .section-icon{font-size:1.25rem;color:var(--accent-primary)}
+        .card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--border-radius);padding:2rem;box-shadow:var(--shadow-sm);margin-bottom:2rem}
+        .card-danger{border-color:var(--danger)}
+        .btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.875rem 1.5rem;font-family:'Montserrat',sans-serif;font-weight:600;font-size:0.875rem;border:none;border-radius:8px;cursor:pointer;transition:all 0.3s ease;text-transform:uppercase;letter-spacing:0.5px}
+        .btn-primary{background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));color:var(--bg-primary);box-shadow:var(--shadow-sm)}
+        .btn-primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:var(--shadow-md),var(--shadow-glow)}
+        .btn-success{background:linear-gradient(135deg,var(--success),#10b981);color:white}
+        .btn-success:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(52,211,153,0.4)}
+        .btn-danger{background:linear-gradient(135deg,var(--danger),#dc2626);color:white}
+        .btn-danger:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(239,68,68,0.4)}
+        .btn:disabled{opacity:0.5;cursor:not-allowed}
+        .btn-group{display:flex;gap:1rem;flex-wrap:wrap}
+        .form-group{margin-bottom:1.5rem}
+        .form-label{display:block;font-family:'Montserrat',sans-serif;font-weight:600;font-size:0.875rem;margin-bottom:0.5rem;color:var(--text-primary)}
+        .form-textarea{width:100%;min-height:200px;padding:1rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-family:'Courier New',monospace;font-size:0.875rem;resize:vertical;transition:all 0.3s ease}
+        .form-textarea:focus{outline:none;border-color:var(--accent-primary);box-shadow:0 0 0 3px var(--accent-glow)}
+        .alert{padding:1rem 1.5rem;border-radius:8px;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.75rem;animation:slideDown 0.3s ease-out}
+        .alert-success{background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);color:var(--success)}
+        .alert-error{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:var(--danger)}
+        .alert-info{background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);color:#60a5fa}
+        .alert-warning{background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:var(--warning)}
+        .preview-container{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;padding:1.5rem;max-height:400px;overflow-y:auto;margin-top:1rem}
+        .preview-round{margin-bottom:1.5rem}
+        .preview-round-title{font-family:'Montserrat',sans-serif;font-weight:700;color:var(--accent-primary);margin-bottom:0.75rem}
+        .preview-pairing{padding:0.5rem;background:var(--bg-card);border-radius:6px;margin-bottom:0.5rem;font-size:0.875rem}
+        .status-badge{display:inline-block;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+        .status-success{background:rgba(52,211,153,0.15);color:var(--success);border:1px solid rgba(52,211,153,0.3)}
+        .status-warning{background:rgba(251,191,36,0.15);color:var(--warning);border:1px solid rgba(251,191,36,0.3)}
+        .loading{display:flex;flex-direction:column;align-items:center;padding:2rem;gap:1rem}
+        .spinner{width:36px;height:36px;border:3px solid var(--bg-card);border-top-color:var(--accent-primary);border-radius:50%;animation:spin 0.8s linear infinite}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @media (max-width:768px){.header-title{font-size:2rem}.container{padding:2rem 1rem}.btn-group{flex-direction:column}}
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1 class="header-title">
+                <i class="fas fa-cog"></i>
+                Panel de Administración
+            </h1>
+            <p class="header-subtitle">Gestión del Torneo Round Robin</p>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
+                <a href="calendario.html" class="nav-link"><i class="fas fa-calendar"></i> Calendario</a>
+                <a href="reportar.html" class="nav-link"><i class="fas fa-clipboard-check"></i> Reportar</a>
+                <a href="tabla.html" class="nav-link"><i class="fas fa-trophy"></i> Tabla</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="alerts-container"></div>
+
+        <!-- GENERAR CALENDARIO -->
+        <section class="section">
+            <h2 class="section-title">
+                <i class="section-icon fas fa-calendar-plus"></i>
+                1. Generar Calendario Round Robin
+            </h2>
+            <div class="card">
+                <p style="color:var(--text-secondary);margin-bottom:1rem">
+                    Genera el calendario de 21 rondas basado en los jugadores registrados. Esto creará <code>/calendario</code> con nombres.
+                </p>
+                <div class="btn-group">
+                    <button id="btn-generate-calendar" class="btn btn-primary">
+                        <i class="fas fa-magic"></i> Generar Calendario
+                    </button>
+                    <button id="btn-preview-calendar" class="btn btn-success">
+                        <i class="fas fa-eye"></i> Previsualizar
+                    </button>
+                </div>
+                <div id="calendar-preview" class="preview-container" style="display:none"></div>
+            </div>
+        </section>
+
+        <!-- PUBLICAR RONDAS -->
+        <section class="section">
+            <h2 class="section-title">
+                <i class="section-icon fas fa-upload"></i>
+                2. Publicar Rondas (Convertir a IDs)
+            </h2>
+            <div class="card">
+                <p style="color:var(--text-secondary);margin-bottom:1rem">
+                    Convierte <code>/calendario</code> (nombres) a <code>/rondas</code> (IDs de jugadores) para que funcione el sistema de reporte.
+                </p>
+                <div class="btn-group">
+                    <button id="btn-publish-rounds" class="btn btn-success">
+                        <i class="fas fa-paper-plane"></i> Publicar Todas las Rondas
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- IMPORTAR TIEMPOS -->
+        <section class="section">
+            <h2 class="section-title">
+                <i class="section-icon fas fa-clock"></i>
+                3. Importar Tiempos de Rondas
+            </h2>
+            <div class="card">
+                <p style="color:var(--text-secondary);margin-bottom:1rem">
+                    Pega un JSON con los tiempos de inicio y fin para las 21 rondas. Se guardará en <code>/tournament/rounds</code>.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">JSON de Tiempos (formato: {"1": {"startAt": timestamp, "endAt": timestamp}, ...})</label>
+                    <textarea id="times-json" class="form-textarea" placeholder='{"1": {"startAt": 1699999999999, "endAt": 1700086399999}, "2": {...}, ...}'></textarea>
+                </div>
+                <div class="btn-group">
+                    <button id="btn-import-times" class="btn btn-primary">
+                        <i class="fas fa-file-import"></i> Importar Tiempos
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- GESTIÓN DE RONDA -->
+        <section class="section">
+            <h2 class="section-title">
+                <i class="section-icon fas fa-forward"></i>
+                4. Gestión de Ronda Actual
+            </h2>
+            <div class="card">
+                <p style="color:var(--text-secondary);margin-bottom:1rem">
+                    Ronda actual: <strong id="current-round-display">-</strong>
+                </p>
+                <div class="btn-group">
+                    <button id="btn-next-round" class="btn btn-success">
+                        <i class="fas fa-step-forward"></i> Avanzar a Siguiente Ronda
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ZONA PELIGROSA -->
+        <section class="section">
+            <h2 class="section-title" style="color:var(--danger)">
+                <i class="section-icon fas fa-exclamation-triangle"></i>
+                Zona Peligrosa
+            </h2>
+            <div class="card card-danger">
+                <p style="color:var(--text-secondary);margin-bottom:1rem">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Estas acciones son irreversibles. Úsalas con precaución.
+                </p>
+                <div class="btn-group">
+                    <button id="btn-reset-calendar" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Eliminar /calendario
+                    </button>
+                    <button id="btn-reset-rounds" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Eliminar /rondas
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyC-qg8pD2OMjzOR5iwH_xIYVrwKlckCYGg",
+            authDomain: "hmena-torneo-bc215.firebaseapp.com",
+            databaseURL: "https://hmena-torneo-bc215-default-rtdb.firebaseio.com",
+            projectId: "hmena-torneo-bc215",
+            storageBucket: "hmena-torneo-bc215.firebasestorage.app",
+            messagingSenderId: "843984319871",
+            appId: "1:843984319871:web:3193a4c5d949b72616564a"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let jugadores = {};
+        let currentRound = 1;
+
+        // Cargar datos
+        onValue(ref(db, 'jugadores'), (snapshot) => {
+            if (snapshot.exists()) jugadores = snapshot.val();
+        });
+
+        onValue(ref(db, 'tournament/currentRound'), (snapshot) => {
+            if (snapshot.exists()) {
+                currentRound = snapshot.val();
+                document.getElementById('current-round-display').textContent = currentRound;
+            }
+        });
+
+        // Event listeners
+        document.getElementById('btn-generate-calendar').addEventListener('click', generateCalendar);
+        document.getElementById('btn-preview-calendar').addEventListener('click', previewCalendar);
+        document.getElementById('btn-publish-rounds').addEventListener('click', publishRounds);
+        document.getElementById('btn-import-times').addEventListener('click', importTimes);
+        document.getElementById('btn-next-round').addEventListener('click', nextRound);
+        document.getElementById('btn-reset-calendar').addEventListener('click', resetCalendar);
+        document.getElementById('btn-reset-rounds').addEventListener('click', resetRounds);
+
+        async function generateCalendar() {
+            try {
+                if (Object.keys(jugadores).length === 0) {
+                    showAlert('No hay jugadores registrados', 'error');
+                    return;
+                }
+
+                if (!confirm('¿Generar calendario Round Robin? Esto sobrescribirá /calendario si existe.')) return;
+
+                showAlert('Generando calendario...', 'info');
+
+                const playerNames = Object.values(jugadores).map(j => j.nombre);
+                const calendar = generateRoundRobin(playerNames);
+
+                await set(ref(db, 'calendario'), calendar);
+                showAlert('✅ Calendario generado exitosamente', 'success');
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error al generar calendario', 'error');
+            }
+        }
+
+        async function previewCalendar() {
+            try {
+                const calendarSnapshot = await get(ref(db, 'calendario'));
+                const previewDiv = document.getElementById('calendar-preview');
+
+                if (!calendarSnapshot.exists()) {
+                    showAlert('No hay calendario generado. Genera uno primero.', 'warning');
+                    return;
+                }
+
+                const calendar = calendarSnapshot.val();
+                let html = '';
+
+                Object.entries(calendar).sort((a, b) => {
+                    const numA = parseInt(a[0].replace('ronda', ''));
+                    const numB = parseInt(b[0].replace('ronda', ''));
+                    return numA - numB;
+                }).forEach(([ronda, pairings]) => {
+                    const roundNum = ronda.replace('ronda', '');
+                    html += `<div class="preview-round">`;
+                    html += `<div class="preview-round-title"><i class="fas fa-layer-group"></i> Ronda ${roundNum}</div>`;
+                    pairings.forEach((p, idx) => {
+                        if (p.bye) {
+                            html += `<div class="preview-pairing">${idx + 1}. ${escapeHtml(p.p1_name)} - <em>BYE</em></div>`;
+                        } else {
+                            html += `<div class="preview-pairing">${idx + 1}. ${escapeHtml(p.p1_name)} vs ${escapeHtml(p.p2_name)}</div>`;
+                        }
+                    });
+                    html += `</div>`;
+                });
+
+                previewDiv.innerHTML = html;
+                previewDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error al previsualizar calendario', 'error');
+            }
+        }
+
+        async function publishRounds() {
+            try {
+                const calendarSnapshot = await get(ref(db, 'calendario'));
+                if (!calendarSnapshot.exists()) {
+                    showAlert('No hay calendario generado. Genera uno primero.', 'error');
+                    return;
+                }
+
+                if (!confirm('¿Publicar rondas? Esto convertirá nombres a IDs y guardará en /rondas.')) return;
+
+                showAlert('Publicando rondas...', 'info');
+
+                const calendar = calendarSnapshot.val();
+                const rounds = {};
+
+                // Crear mapa nombre -> id
+                const nameToId = {};
+                Object.entries(jugadores).forEach(([id, j]) => {
+                    nameToId[j.nombre] = id;
+                });
+
+                // Convertir calendario
+                Object.entries(calendar).forEach(([ronda, pairings]) => {
+                    rounds[ronda] = { partidos: {} };
+                    pairings.forEach((p, idx) => {
+                        if (!p.bye) {
+                            const id1 = nameToId[p.p1_name];
+                            const id2 = nameToId[p.p2_name];
+                            if (id1 && id2) {
+                                const matchId = `m${String(idx + 1).padStart(2, '0')}`;
+                                rounds[ronda].partidos[matchId] = {
+                                    jugador1: id1,
+                                    jugador2: id2
+                                };
+                            }
+                        }
+                    });
+                });
+
+                await set(ref(db, 'rondas'), rounds);
+                showAlert('✅ Rondas publicadas exitosamente', 'success');
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error al publicar rondas', 'error');
+            }
+        }
+
+        async function importTimes() {
+            try {
+                const jsonText = document.getElementById('times-json').value.trim();
+                if (!jsonText) {
+                    showAlert('Pega el JSON de tiempos', 'warning');
+                    return;
+                }
+
+                const times = JSON.parse(jsonText);
+                
+                // Validar formato
+                for (let i = 1; i <= 21; i++) {
+                    if (!times[i.toString()] || !times[i.toString()].startAt || !times[i.toString()].endAt) {
+                        showAlert(`Falta información para la ronda ${i}`, 'error');
+                        return;
+                    }
+                }
+
+                if (!confirm('¿Importar tiempos de rondas?')) return;
+
+                showAlert('Importando tiempos...', 'info');
+                await set(ref(db, 'tournament/rounds'), times);
+                showAlert('✅ Tiempos importados exitosamente', 'success');
+                document.getElementById('times-json').value = '';
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error al importar tiempos. Verifica el formato JSON.', 'error');
+            }
+        }
+
+        async function nextRound() {
+            try {
+                if (currentRound >= 21) {
+                    showAlert('Ya estás en la última ronda', 'warning');
+                    return;
+                }
+
+                if (!confirm(`¿Avanzar de ronda ${currentRound} a ronda ${currentRound + 1}?`)) return;
+
+                await set(ref(db, 'tournament/currentRound'), currentRound + 1);
+                showAlert(`✅ Avanzado a ronda ${currentRound + 1}`, 'success');
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error al avanzar ronda', 'error');
+            }
+        }
+
+        async function resetCalendar() {
+            if (!confirm('⚠️ ¿ELIMINAR /calendario? Esta acción no se puede deshacer.')) return;
+            if (!confirm('⚠️ ¿Estás SEGURO? Escribe "ELIMINAR" para confirmar') && prompt('Escribe "ELIMINAR"') !== 'ELIMINAR') return;
+
+            try {
+                showAlert('Eliminando calendario...', 'info');
+                await remove(ref(db, 'calendario'));
+                showAlert('✅ /calendario eliminado', 'success');
+                document.getElementById('calendar-preview').style.display = 'none';
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error al eliminar calendario', 'error');
+            }
+        }
+
+        async function resetRounds() {
+            if (!confirm('⚠️ ¿ELIMINAR /rondas? Esta acción no se puede deshacer.')) return;
+            if (prompt('⚠️ Escribe "ELIMINAR" para confirmar') !== 'ELIMINAR') return;
+
+            try {
+                showAlert('Eliminando rondas...', 'info');
+                await remove(ref(db, 'rondas'));
+                showAlert('✅ /rondas eliminado', 'success');
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error al eliminar rondas', 'error');
+            }
+        }
+
+        // Algoritmo Round Robin
+        function generateRoundRobin(players) {
+            const n = players.length;
+            const isOdd = n % 2 !== 0;
+            const participants = isOdd ? [...players, null] : [...players];
+            const numParticipants = participants.length;
+            const numRounds = numParticipants - 1;
+            const calendar = {};
+
+            for (let round = 0; round < numRounds; round++) {
+                const roundName = `ronda${round + 1}`;
+                calendar[roundName] = [];
+
+                for (let i = 0; i < numParticipants / 2; i++) {
+                    const p1 = participants[i];
+                    const p2 = participants[numParticipants - 1 - i];
+
+                    if (p1 && p2) {
+                        calendar[roundName].push({
+                            p1_name: p1,
+                            p2_name: p2,
+                            bye: false
+                        });
+                    } else if (p1 || p2) {
+                        calendar[roundName].push({
+                            p1_name: p1 || p2,
+                            p2_name: null,
+                            bye: true
+                        });
+                    }
+                }
+
+                // Rotar jugadores (mantener el primero fijo)
+                const fixed = participants[0];
+                const rotated = participants.slice(1);
+                rotated.push(rotated.shift());
+                participants.splice(0, participants.length, fixed, ...rotated);
+            }
+
+            return calendar;
+        }
+
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alerts-container');
+            const icons = { success: 'fas fa-check-circle', error: 'fas fa-exclamation-circle', info: 'fas fa-info-circle', warning: 'fas fa-exclamation-triangle' };
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = `<i class="${icons[type]}"></i><span>${message}</span>`;
+            container.appendChild(alert);
+            setTimeout(() => {
+                alert.style.animation = 'fadeOut 0.3s ease-out';
+                setTimeout(() => alert.remove(), 300);
+            }, 5000);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+
+        const style = document.createElement('style');
+        style.textContent = `@keyframes fadeOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-10px)}}`;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

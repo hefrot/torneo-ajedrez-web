@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torneo de Ajedrez - Enfrentamientos y Clasificación</title>
+    <meta name="description" content="Sistema profesional de gestión de torneos de ajedrez con pareos en tiempo real">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Iconos (opcional - usar Font Awesome o similar) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- HEADER / ENCABEZADO -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="header-title">
+                <i class="fas fa-chess"></i>
+                Torneo de Ajedrez 2025
+            </h1>
+            <p class="header-subtitle">Sistema Suizo - Clasificación en Tiempo Real</p>
+            
+            <div class="header-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="total-players">0</span>
+                    <span class="stat-label">Jugadores</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="current-round">0</span>
+                    <span class="stat-label">Ronda Actual</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="total-games">0</span>
+                    <span class="stat-label">Partidas</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div class="container">
+        <!-- SECCIÓN DE CLASIFICACIÓN -->
+        <section class="section">
+            <div class="section-header">
+                <i class="section-icon fas fa-trophy"></i>
+                <h2 class="section-title">Clasificación General</h2>
+            </div>
+            
+            <div id="players-container">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p class="loading-text">Cargando clasificación...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN DE PAREOS -->
+        <section class="section">
+            <div class="section-header">
+                <i class="section-icon fas fa-chess-board"></i>
+                <h2 class="section-title">Pareos de Ronda</h2>
+            </div>
+            
+            <div id="pairings-container">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p class="loading-text">Cargando pareos...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- BOTÓN DE ADMINISTRACIÓN (opcional) -->
+        <div class="text-center mt-4">
+            <a href="admin.html" class="btn btn-secondary">
+                <i class="fas fa-cog"></i>
+                Panel de Administración
+            </a>
+        </div>
+    </div>
+
+    <!-- FIREBASE SDK -->
+    <script type="module">
+        // Importar Firebase
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        // Tu configuración de Firebase (REEMPLAZAR CON TUS CREDENCIALES)
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY",
+            authDomain: "TU_AUTH_DOMAIN",
+            databaseURL: "TU_DATABASE_URL",
+            projectId: "TU_PROJECT_ID",
+            storageBucket: "TU_STORAGE_BUCKET",
+            messagingSenderId: "TU_MESSAGING_SENDER_ID",
+            appId: "TU_APP_ID"
+        };
+
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        // Hacer disponible globalmente
+        window.firebaseApp = app;
+        window.firebaseDatabase = database;
+    </script>
+    
+    <!-- JAVASCRIPT PRINCIPAL -->
+    <script src="app.js"></script>
+</body>
+</html>
