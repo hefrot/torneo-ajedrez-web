@@ -3,345 +3,204 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔐 Admin - Torneo Hefrot</title>
+    <title>Admin - Torneo Round Robin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;800&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-primary: #0a0e1a;
-            --bg-secondary: #1a1f2e;
-            --accent-primary: #00d9ff;
-            --accent-secondary: #0099cc;
-            --text-primary: #e8eaed;
-            --text-secondary: #9aa0a6;
-            --border-color: rgba(0, 217, 255, 0.3);
-            --success: #10b981;
-            --error: #ef4444;
-        }
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-        }
-
-        /* ===== LOGIN SCREEN ===== */
-        #login-screen {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        
-        .login-box {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
-            border-radius: 16px;
-            padding: 3rem;
-            max-width: 420px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            animation: slideIn 0.4s ease;
-        }
-        
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .login-box h1 {
-            text-align: center;
-            margin-bottom: 0.5rem;
-            color: var(--accent-primary);
-            font-size: 2rem;
-        }
-        
-        .login-box p {
-            text-align: center;
-            color: var(--text-secondary);
-            margin-bottom: 2rem;
-            font-size: 0.9rem;
-        }
-        
-        .login-box input {
-            width: 100%;
-            padding: 1rem;
-            background: var(--bg-primary);
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 1rem;
-            margin-bottom: 1rem;
-            transition: all 0.3s;
-        }
-        
-        .login-box input:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.2);
-        }
-        
-        .login-box button {
-            width: 100%;
-            padding: 1rem;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border: none;
-            border-radius: 8px;
-            color: var(--bg-primary);
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-        
-        .login-box button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 217, 255, 0.4);
-        }
-        
-        .error {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid var(--error);
-            color: var(--error);
-            padding: 0.75rem;
-            border-radius: 8px;
-            text-align: center;
-            margin-top: 1rem;
-            display: none;
-            animation: shake 0.4s;
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
-        }
-
-        /* ===== ADMIN CONTENT ===== */
-        #admin-content {
-            display: none;
-            min-height: 100vh;
-        }
-        
-        .header {
-            background: var(--bg-secondary);
-            padding: 1.5rem 2rem;
-            border-bottom: 2px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .header h1 {
-            color: var(--accent-primary);
-            font-size: 1.5rem;
-        }
-        
-        .logout-btn {
-            padding: 0.6rem 1.5rem;
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid var(--error);
-            color: var(--error);
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .logout-btn:hover {
-            background: var(--error);
-            color: white;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        
-        .form-section {
-            background: var(--bg-secondary);
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-        
-        .form-section h2 {
-            color: var(--accent-primary);
-            margin-bottom: 1.5rem;
-            font-size: 1.3rem;
-        }
-        
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .form-group label {
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-        
-        .form-group input, .form-group select {
-            padding: 0.75rem;
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 1rem;
-        }
-        
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-        }
-        
-        .btn-primary {
-            padding: 0.75rem 2rem;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border: none;
-            border-radius: 8px;
-            color: var(--bg-primary);
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.3s;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-        }
-        
-        .status-message {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-top: 1rem;
-            display: none;
-        }
-        
-        .status-message.success {
-            background: rgba(16, 185, 129, 0.2);
-            border: 1px solid var(--success);
-            color: var(--success);
-        }
-        
-        .status-message.error {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid var(--error);
-            color: var(--error);
-        }
+        :root{--bg-primary:#0a0e1a;--bg-secondary:#151922;--bg-card:#1a1f2e;--bg-card-hover:#202633;--accent-primary:#00d9ff;--accent-secondary:#0099cc;--accent-glow:rgba(0,217,255,0.3);--text-primary:#e8eaed;--text-secondary:#9aa0a6;--text-muted:#5f6368;--success:#34d399;--warning:#fbbf24;--danger:#ef4444;--shadow-sm:0 2px 4px rgba(0,0,0,0.3);--shadow-md:0 4px 12px rgba(0,0,0,0.4);--shadow-lg:0 8px 24px rgba(0,0,0,0.5);--shadow-glow:0 0 20px var(--accent-glow);--border-radius:12px;--border-color:#2d3748}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Open Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.6;min-height:100vh}
+        body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at 20% 50%,rgba(0,217,255,0.03) 0%,transparent 50%),radial-gradient(circle at 80% 80%,rgba(0,153,204,0.03) 0%,transparent 50%);pointer-events:none;z-index:0}
+        #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
+        .login-box{background:var(--bg-secondary);border:2px solid var(--border-color);border-radius:16px;padding:3rem;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:slideIn 0.4s ease}
+        @keyframes slideIn{from{opacity:0;transform:translateY(-30px)}to{opacity:1;transform:translateY(0)}}
+        .login-box h1{text-align:center;margin-bottom:0.5rem;color:var(--accent-primary);font-size:2rem}
+        .login-box p{text-align:center;color:var(--text-secondary);margin-bottom:2rem;font-size:0.9rem}
+        .login-box input{width:100%;padding:1rem;background:var(--bg-primary);border:2px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:1rem;margin-bottom:1rem;transition:all 0.3s}
+        .login-box input:focus{outline:none;border-color:var(--accent-primary);box-shadow:0 0 0 3px var(--accent-glow)}
+        .login-box button{width:100%;padding:1rem;background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));border:none;border-radius:8px;color:var(--bg-primary);font-size:1rem;font-weight:600;cursor:pointer;transition:transform 0.3s,box-shadow 0.3s}
+        .login-box button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,217,255,0.4)}
+        .error{background:rgba(239,68,68,0.2);border:1px solid var(--danger);color:var(--danger);padding:0.75rem;border-radius:8px;text-align:center;margin-top:1rem;display:none;animation:shake 0.4s}
+        @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+        #admin-content{display:none;min-height:100vh}
+        .header{position:relative;background:linear-gradient(135deg,var(--bg-secondary) 0%,#1a2332 100%);padding:1.5rem 2rem;border-bottom:2px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;z-index:10}
+        .header h1{color:var(--accent-primary);font-size:1.5rem}
+        .logout-btn{padding:0.6rem 1.5rem;background:rgba(239,68,68,0.2);border:1px solid var(--danger);color:var(--danger);border-radius:8px;cursor:pointer;font-weight:600;transition:all 0.3s}
+        .logout-btn:hover{background:var(--danger);color:white}
+        .container{position:relative;max-width:1400px;margin:0 auto;padding:2rem;z-index:1}
+        .tabs{display:flex;gap:0.5rem;margin-bottom:2rem;flex-wrap:wrap}
+        .tab{padding:0.75rem 1.5rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;cursor:pointer;font-weight:600;transition:all 0.3s}
+        .tab:hover{background:var(--bg-card-hover);border-color:var(--accent-primary)}
+        .tab.active{background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));color:var(--bg-primary);border-color:var(--accent-primary)}
+        .tab-content{display:none}
+        .tab-content.active{display:block;animation:fadeIn 0.3s}
+        .section{background:var(--bg-card);border:2px solid var(--border-color);border-radius:12px;padding:2rem;margin-bottom:2rem}
+        .section h2{color:var(--accent-primary);margin-bottom:1.5rem;font-size:1.3rem}
+        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1rem}
+        .form-group{display:flex;flex-direction:column}
+        .form-group label{color:var(--text-secondary);margin-bottom:0.5rem;font-size:0.9rem;font-weight:600}
+        .form-group input,.form-group select{padding:0.75rem;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:1rem}
+        .form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent-primary)}
+        .btn-primary{padding:0.75rem 2rem;background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));border:none;border-radius:8px;color:var(--bg-primary);font-weight:600;cursor:pointer;transition:transform 0.3s}
+        .btn-primary:hover{transform:translateY(-2px)}
+        .btn-danger{padding:0.75rem 2rem;background:linear-gradient(135deg,var(--danger),#dc2626);border:none;border-radius:8px;color:white;font-weight:600;cursor:pointer;transition:transform 0.3s}
+        .btn-danger:hover{transform:translateY(-2px)}
+        .status-message{padding:1rem;border-radius:8px;margin-top:1rem;display:none}
+        .status-message.success{background:rgba(52,211,153,0.2);border:1px solid var(--success);color:var(--success)}
+        .status-message.error{background:rgba(239,68,68,0.2);border:1px solid var(--danger);color:var(--danger)}
+        .player-list{display:grid;gap:1rem;margin-top:1rem}
+        .player-item{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;padding:1rem;display:flex;justify-content:space-between;align-items:center}
+        .player-info{flex:1}
+        .player-name{font-weight:600;font-size:1.1rem;margin-bottom:0.25rem}
+        .player-details{font-size:0.875rem;color:var(--text-secondary)}
+        .btn-small{padding:0.5rem 1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;cursor:pointer;font-size:0.875rem;transition:all 0.3s}
+        .btn-small:hover{background:var(--bg-card-hover);border-color:var(--accent-primary)}
+        .btn-small.danger{border-color:var(--danger);color:var(--danger)}
+        .btn-small.danger:hover{background:var(--danger);color:white}
+        .pairing-grid{display:grid;gap:1rem;margin-top:1rem}
+        .pairing-item{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;padding:1rem}
+        .pairing-players{display:flex;justify-content:space-around;align-items:center;margin-bottom:0.5rem}
+        .vs{font-weight:700;color:var(--accent-primary)}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @media (max-width:768px){.header{flex-direction:column;gap:1rem}.tabs{flex-direction:column}.form-grid{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
-    <!-- ===== LOGIN SCREEN ===== -->
     <div id="login-screen">
         <div class="login-box">
             <h1>🔐 Admin Panel</h1>
-            <p>Torneo Hefrot 2025</p>
+            <p>Torneo Round Robin 2025</p>
             <form id="login-form">
-                <input 
-                    type="password" 
-                    id="password" 
-                    placeholder="Ingresa la contraseña" 
-                    autocomplete="off"
-                    autofocus 
-                    required
-                >
+                <input type="password" id="password" placeholder="Ingresa la contraseña" autocomplete="off" autofocus required>
                 <button type="submit">🔓 Acceder</button>
                 <div class="error" id="error-msg">❌ Contraseña incorrecta</div>
             </form>
         </div>
     </div>
 
-    <!-- ===== ADMIN CONTENT ===== -->
     <div id="admin-content">
         <header class="header">
-            <h1>⚽ Panel de Administración - Torneo Hefrot</h1>
+            <h1>⚽ Panel de Administración</h1>
             <button class="logout-btn" onclick="logout()">🚪 Cerrar Sesión</button>
         </header>
 
         <div class="container">
-            <!-- REGISTRAR PARTIDO -->
-            <section class="form-section">
-                <h2>📝 Registrar Nuevo Partido</h2>
-                <form id="partido-form">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Equipo Local</label>
-                            <select id="equipo-local" required>
-                                <option value="">Seleccionar...</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Goles Local</label>
-                            <input type="number" id="goles-local" min="0" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Equipo Visitante</label>
-                            <select id="equipo-visitante" required>
-                                <option value="">Seleccionar...</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Goles Visitante</label>
-                            <input type="number" id="goles-visitante" min="0" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn-primary">✅ Registrar Partido</button>
-                    <div id="status-partido" class="status-message"></div>
-                </form>
-            </section>
+            <div class="tabs">
+                <div class="tab active" data-tab="jugadores">👥 Jugadores</div>
+                <div class="tab" data-tab="pareos">🎯 Pareos</div>
+                <div class="tab" data-tab="rondas">📅 Rondas</div>
+            </div>
 
-            <!-- REGISTRAR GOLEADOR -->
-            <section class="form-section">
-                <h2>⚽ Registrar Goleador</h2>
-                <form id="goleador-form">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Nombre del Jugador</label>
-                            <input type="text" id="nombre-goleador" required>
+            <div id="tab-jugadores" class="tab-content active">
+                <div class="section">
+                    <h2>➕ Agregar Jugador</h2>
+                    <form id="add-player-form">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Nombre Completo</label>
+                                <input type="text" id="player-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Rating ELO</label>
+                                <input type="number" id="player-elo" min="0" max="3500" value="1500" required>
+                            </div>
+                            <div class="form-group">
+                                <label>WhatsApp</label>
+                                <input type="text" id="player-whatsapp" placeholder="+52...">
+                            </div>
+                            <div class="form-group">
+                                <label>Usuario Lichess</label>
+                                <input type="text" id="player-lichess" placeholder="@usuario">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Equipo</label>
-                            <select id="equipo-goleador" required>
-                                <option value="">Seleccionar...</option>
-                            </select>
+                        <button type="submit" class="btn-primary">✅ Agregar Jugador</button>
+                        <div id="status-player" class="status-message"></div>
+                    </form>
+                </div>
+
+                <div class="section">
+                    <h2>📋 Lista de Jugadores</h2>
+                    <div id="players-list"></div>
+                </div>
+            </div>
+
+            <div id="tab-pareos" class="tab-content">
+                <div class="section">
+                    <h2>🎲 Crear Pareo Manual</h2>
+                    <form id="create-pairing-form">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Ronda</label>
+                                <select id="pairing-round" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Jugador 1</label>
+                                <select id="player1" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Jugador 2</label>
+                                <select id="player2" required></select>
+                            </div>
                         </div>
+                        <button type="submit" class="btn-primary">✅ Crear Pareo</button>
+                        <div id="status-pairing" class="status-message"></div>
+                    </form>
+                </div>
+
+                <div class="section">
+                    <h2>📋 Ver Pareos por Ronda</h2>
+                    <div class="form-group" style="max-width:300px">
+                        <label>Seleccionar Ronda</label>
+                        <select id="view-round"></select>
+                    </div>
+                    <div id="pairings-list" style="margin-top:1rem"></div>
+                </div>
+            </div>
+
+            <div id="tab-rondas" class="tab-content">
+                <div class="section">
+                    <h2>🎮 Gestión de Rondas</h2>
+                    <p style="color:var(--text-secondary);margin-bottom:1rem">Ronda actual del torneo</p>
+                    <div class="form-grid" style="max-width:400px">
                         <div class="form-group">
-                            <label>Cantidad de Goles</label>
-                            <input type="number" id="cantidad-goles" min="1" required>
+                            <label>Ronda Actual</label>
+                            <input type="number" id="current-round-input" min="1" max="21" value="1">
                         </div>
                     </div>
-                    <button type="submit" class="btn-primary">✅ Registrar Goles</button>
-                    <div id="status-goleador" class="status-message"></div>
-                </form>
-            </section>
+                    <button onclick="updateCurrentRound()" class="btn-primary">💾 Actualizar Ronda</button>
+                    <div id="status-round" class="status-message"></div>
+                </div>
+
+                <div class="section">
+                    <h2>⚠️ Zona Peligrosa</h2>
+                    <p style="color:var(--text-muted);margin-bottom:1rem">Estas acciones no se pueden deshacer</p>
+                    <button onclick="resetAllResults()" class="btn-danger">🗑️ Reiniciar Todos los Resultados</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script>
-        // ===== CONFIGURACIÓN =====
-        const ADMIN_PASSWORD = 'hefrot2025';
-        const REPO = 'hefrot/torneo-hefrot';
-        const BRANCH = 'main';
-        const TOKEN = 'ghp_5sO7Nxpo6G2H1AEMZMTrPsONp1HWMM2EqXNY';
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+        import { getDatabase, ref, get, set, update, push, remove, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-        // ===== LOGIN =====
+        const firebaseConfig = {
+            apiKey: "AIzaSyC-qg8pD2OMjzOR5iwH_xIYVrwKlckCYGg",
+            authDomain: "hmena-torneo-bc215.firebaseapp.com",
+            databaseURL: "https://hmena-torneo-bc215-default-rtdb.firebaseio.com",
+            projectId: "hmena-torneo-bc215",
+            storageBucket: "hmena-torneo-bc215.firebasestorage.app",
+            messagingSenderId: "843984319871",
+            appId: "1:843984319871:web:3193a4c5d949b72616564a"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const ADMIN_PASSWORD = 'hefrot2025';
+
         document.getElementById('login-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const password = document.getElementById('password').value;
-            
             if (password === ADMIN_PASSWORD) {
                 sessionStorage.setItem('admin_auth', 'true');
                 showAdmin();
@@ -356,157 +215,280 @@
         function showAdmin() {
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('admin-content').style.display = 'block';
-            cargarEquipos();
+            loadPlayers();
+            loadCurrentRound();
+            populateRoundSelects();
         }
 
-        function logout() {
+        window.logout = function() {
             sessionStorage.removeItem('admin_auth');
             location.reload();
         }
 
-        // Verificar si ya está logueado
         if (sessionStorage.getItem('admin_auth') === 'true') {
             showAdmin();
         }
 
-        // ===== FUNCIONES PRINCIPALES =====
-        async function cargarEquipos() {
-            try {
-                const response = await fetch(`https://api.github.com/repos/${REPO}/contents/equipos.json?ref=${BRANCH}`, {
-                    headers: { 'Authorization': `token ${TOKEN}` }
-                });
-                const data = await response.json();
-                const equipos = JSON.parse(atob(data.content));
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+            });
+        });
 
-                const selects = ['equipo-local', 'equipo-visitante', 'equipo-goleador'];
-                selects.forEach(id => {
-                    const select = document.getElementById(id);
-                    select.innerHTML = '<option value="">Seleccionar...</option>';
-                    equipos.forEach(eq => {
-                        select.innerHTML += `<option value="${eq.nombre}">${eq.nombre}</option>`;
-                    });
-                });
-            } catch (error) {
-                console.error('Error cargando equipos:', error);
+        function populateRoundSelects() {
+            const selects = ['pairing-round', 'view-round'];
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                select.innerHTML = '';
+                for (let i = 1; i <= 21; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = `Ronda ${i}`;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        async function loadCurrentRound() {
+            const snapshot = await get(ref(db, 'tournament/currentRound'));
+            if (snapshot.exists()) {
+                document.getElementById('current-round-input').value = snapshot.val();
             }
         }
 
-        // REGISTRAR PARTIDO
-        document.getElementById('partido-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const local = document.getElementById('equipo-local').value;
-            const golesLocal = parseInt(document.getElementById('goles-local').value);
-            const visitante = document.getElementById('equipo-visitante').value;
-            const golesVisitante = parseInt(document.getElementById('goles-visitante').value);
-
-            if (local === visitante) {
-                mostrarStatus('status-partido', 'Un equipo no puede jugar contra sí mismo', 'error');
+        window.updateCurrentRound = async function() {
+            const round = parseInt(document.getElementById('current-round-input').value);
+            if (round < 1 || round > 21) {
+                showStatus('status-round', 'Número de ronda inválido', 'error');
                 return;
             }
-
             try {
-                const response = await fetch(`https://api.github.com/repos/${REPO}/contents/equipos.json?ref=${BRANCH}`, {
-                    headers: { 'Authorization': `token ${TOKEN}` }
-                });
-                const data = await response.json();
-                let equipos = JSON.parse(atob(data.content));
-
-                equipos = equipos.map(eq => {
-                    if (eq.nombre === local) {
-                        eq.pj++;
-                        eq.gf += golesLocal;
-                        eq.gc += golesVisitante;
-                        if (golesLocal > golesVisitante) { eq.pg++; eq.pts += 3; }
-                        else if (golesLocal === golesVisitante) { eq.pe++; eq.pts += 1; }
-                        else { eq.pp++; }
-                    }
-                    if (eq.nombre === visitante) {
-                        eq.pj++;
-                        eq.gf += golesVisitante;
-                        eq.gc += golesLocal;
-                        if (golesVisitante > golesLocal) { eq.pg++; eq.pts += 3; }
-                        else if (golesVisitante === golesLocal) { eq.pe++; eq.pts += 1; }
-                        else { eq.pp++; }
-                    }
-                    eq.dif = eq.gf - eq.gc;
-                    return eq;
-                });
-
-                await fetch(`https://api.github.com/repos/${REPO}/contents/equipos.json`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Partido: ${local} ${golesLocal}-${golesVisitante} ${visitante}`,
-                        content: btoa(unescape(encodeURIComponent(JSON.stringify(equipos, null, 2)))),
-                        sha: data.sha,
-                        branch: BRANCH
-                    })
-                });
-
-                mostrarStatus('status-partido', '✅ Partido registrado correctamente', 'success');
-                e.target.reset();
+                await set(ref(db, 'tournament/currentRound'), round);
+                showStatus('status-round', '✅ Ronda actualizada correctamente', 'success');
             } catch (error) {
-                mostrarStatus('status-partido', '❌ Error al registrar partido', 'error');
-                console.error(error);
+                showStatus('status-round', '❌ Error al actualizar ronda', 'error');
             }
-        });
+        }
 
-        // REGISTRAR GOLEADOR
-        document.getElementById('goleador-form').addEventListener('submit', async (e) => {
+        function loadPlayers() {
+            onValue(ref(db, 'jugadores'), (snapshot) => {
+                const data = snapshot.val();
+                renderPlayersList(data);
+                populatePlayerSelects(data);
+            });
+        }
+
+        function renderPlayersList(playersData) {
+            const container = document.getElementById('players-list');
+            if (!playersData) {
+                container.innerHTML = '<p style="color:var(--text-muted)">No hay jugadores registrados</p>';
+                return;
+            }
+            const players = Object.entries(playersData).map(([id, p]) => ({ id, ...p }));
+            players.sort((a, b) => (b.puntos || 0) - (a.puntos || 0));
+            let html = '<div class="player-list">';
+            players.forEach(p => {
+                html += `
+                    <div class="player-item">
+                        <div class="player-info">
+                            <div class="player-name">${escapeHtml(p.nombre)}</div>
+                            <div class="player-details">
+                                ELO: ${p.eloActual || p.elo || 1500} | 
+                                Puntos: ${p.puntos || 0} | 
+                                Partidas: ${p.games || 0}
+                                ${p.whatsapp ? ` | WhatsApp: ${p.whatsapp}` : ''}
+                                ${p.lichess ? ` | Lichess: ${p.lichess}` : ''}
+                            </div>
+                        </div>
+                        <button class="btn-small danger" onclick="deletePlayer('${p.id}','${escapeHtml(p.nombre)}')">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function populatePlayerSelects(playersData) {
+            if (!playersData) return;
+            const players = Object.entries(playersData).map(([id, p]) => ({ id, ...p }));
+            players.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+            const selects = ['player1', 'player2'];
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                select.innerHTML = '<option value="">Seleccionar...</option>';
+                players.forEach(p => {
+                    select.innerHTML += `<option value="${p.id}">${escapeHtml(p.nombre)} (${p.eloActual || p.elo || 1500})</option>`;
+                });
+            });
+        }
+
+        document.getElementById('add-player-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const nombre = document.getElementById('nombre-goleador').value.trim();
-            const equipo = document.getElementById('equipo-goleador').value;
-            const goles = parseInt(document.getElementById('cantidad-goles').value);
-
+            const name = document.getElementById('player-name').value.trim();
+            const elo = parseInt(document.getElementById('player-elo').value);
+            const whatsapp = document.getElementById('player-whatsapp').value.trim();
+            const lichess = document.getElementById('player-lichess').value.trim();
+            if (!name || !elo) {
+                showStatus('status-player', 'Completa los campos obligatorios', 'error');
+                return;
+            }
             try {
-                const response = await fetch(`https://api.github.com/repos/${REPO}/contents/goleadores.json?ref=${BRANCH}`, {
-                    headers: { 'Authorization': `token ${TOKEN}` }
+                const newPlayerRef = push(ref(db, 'jugadores'));
+                await set(newPlayerRef, {
+                    nombre: name,
+                    elo: elo,
+                    eloActual: elo,
+                    whatsapp: whatsapp || null,
+                    lichess: lichess || null,
+                    puntos: 0,
+                    games: 0,
+                    wins: 0,
+                    draws: 0,
+                    losses: 0
                 });
-                const data = await response.json();
-                let goleadores = JSON.parse(atob(data.content));
-
-                const existente = goleadores.find(g => g.nombre === nombre && g.equipo === equipo);
-                if (existente) {
-                    existente.goles += goles;
-                } else {
-                    goleadores.push({ nombre, equipo, goles });
-                }
-
-                goleadores.sort((a, b) => b.goles - a.goles);
-
-                await fetch(`https://api.github.com/repos/${REPO}/contents/goleadores.json`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Goleador: ${nombre} (${equipo}) +${goles} goles`,
-                        content: btoa(unescape(encodeURIComponent(JSON.stringify(goleadores, null, 2)))),
-                        sha: data.sha,
-                        branch: BRANCH
-                    })
-                });
-
-                mostrarStatus('status-goleador', '✅ Goleador registrado correctamente', 'success');
+                showStatus('status-player', '✅ Jugador agregado correctamente', 'success');
                 e.target.reset();
+                document.getElementById('player-elo').value = 1500;
             } catch (error) {
-                mostrarStatus('status-goleador', '❌ Error al registrar goleador', 'error');
-                console.error(error);
+                showStatus('status-player', '❌ Error al agregar jugador', 'error');
             }
         });
 
-        function mostrarStatus(id, mensaje, tipo) {
+        window.deletePlayer = async function(id, name) {
+            if (!confirm(`¿Eliminar a ${name}?`)) return;
+            try {
+                await remove(ref(db, `jugadores/${id}`));
+                showStatus('status-player', '✅ Jugador eliminado', 'success');
+            } catch (error) {
+                showStatus('status-player', '❌ Error al eliminar', 'error');
+            }
+        }
+
+        document.getElementById('create-pairing-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const round = document.getElementById('pairing-round').value;
+            const p1 = document.getElementById('player1').value;
+            const p2 = document.getElementById('player2').value;
+            if (!round || !p1 || !p2) {
+                showStatus('status-pairing', 'Completa todos los campos', 'error');
+                return;
+            }
+            if (p1 === p2) {
+                showStatus('status-pairing', 'Los jugadores no pueden ser iguales', 'error');
+                return;
+            }
+            try {
+                const partidoRef = push(ref(db, `rondas/ronda${round}/partidos`));
+                await set(partidoRef, {
+                    jugador1: p1,
+                    jugador2: p2,
+                    createdAt: Date.now()
+                });
+                showStatus('status-pairing', '✅ Pareo creado correctamente', 'success');
+                e.target.reset();
+            } catch (error) {
+                showStatus('status-pairing', '❌ Error al crear pareo', 'error');
+            }
+        });
+
+        document.getElementById('view-round').addEventListener('change', loadPairingsForRound);
+
+        async function loadPairingsForRound() {
+            const round = document.getElementById('view-round').value;
+            if (!round) return;
+            const snapshot = await get(ref(db, `rondas/ronda${round}/partidos`));
+            const container = document.getElementById('pairings-list');
+            if (!snapshot.exists()) {
+                container.innerHTML = '<p style="color:var(--text-muted)">No hay pareos para esta ronda</p>';
+                return;
+            }
+            const partidos = snapshot.val();
+            const jugadoresSnap = await get(ref(db, 'jugadores'));
+            const jugadores = jugadoresSnap.val() || {};
+            let html = '<div class="pairing-grid">';
+            Object.entries(partidos).forEach(([id, p]) => {
+                const j1 = jugadores[p.jugador1];
+                const j2 = jugadores[p.jugador2];
+                if (!j1 || !j2) return;
+                html += `
+                    <div class="pairing-item">
+                        <div class="pairing-players">
+                            <span>${escapeHtml(j1.nombre)}</span>
+                            <span class="vs">VS</span>
+                            <span>${escapeHtml(j2.nombre)}</span>
+                        </div>
+                        <button class="btn-small danger" onclick="deletePairing('${round}','${id}')">
+                            <i class="fas fa-trash"></i> Eliminar Pareo
+                        </button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        window.deletePairing = async function(round, id) {
+            if (!confirm('¿Eliminar este pareo?')) return;
+            try {
+                await remove(ref(db, `rondas/ronda${round}/partidos/${id}`));
+                loadPairingsForRound();
+                showStatus('status-pairing', '✅ Pareo eliminado', 'success');
+            } catch (error) {
+                showStatus('status-pairing', '❌ Error al eliminar', 'error');
+            }
+        }
+
+        window.resetAllResults = async function() {
+            if (!confirm('⚠️ ¿Reiniciar TODOS los resultados? Esto NO SE PUEDE DESHACER')) return;
+            if (!confirm('Última confirmación: ¿REALMENTE quieres borrar todos los resultados?')) return;
+            try {
+                const jugadoresSnap = await get(ref(db, 'jugadores'));
+                if (jugadoresSnap.exists()) {
+                    const updates = {};
+                    Object.keys(jugadoresSnap.val()).forEach(id => {
+                        updates[`jugadores/${id}/puntos`] = 0;
+                        updates[`jugadores/${id}/games`] = 0;
+                        updates[`jugadores/${id}/wins`] = 0;
+                        updates[`jugadores/${id}/draws`] = 0;
+                        updates[`jugadores/${id}/losses`] = 0;
+                    });
+                    await update(ref(db), updates);
+                }
+                for (let i = 1; i <= 21; i++) {
+                    const rondasSnap = await get(ref(db, `rondas/ronda${i}/partidos`));
+                    if (rondasSnap.exists()) {
+                        const partidos = rondasSnap.val();
+                        const updates = {};
+                        Object.keys(partidos).forEach(id => {
+                            updates[`rondas/ronda${i}/partidos/${id}/juegos`] = null;
+                            updates[`rondas/ronda${i}/partidos/${id}/resultado`] = null;
+                            updates[`rondas/ronda${i}/partidos/${id}/reportadoEn`] = null;
+                        });
+                        await update(ref(db), updates);
+                    }
+                }
+                showStatus('status-round', '✅ Todos los resultados han sido reiniciados', 'success');
+            } catch (error) {
+                showStatus('status-round', '❌ Error al reiniciar', 'error');
+            }
+        }
+
+        function showStatus(id, msg, type) {
             const el = document.getElementById(id);
-            el.textContent = mensaje;
-            el.className = `status-message ${tipo}`;
+            el.textContent = msg;
+            el.className = `status-message ${type}`;
             el.style.display = 'block';
             setTimeout(() => el.style.display = 'none', 4000);
+        }
+
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
         }
     </script>
 </body>
