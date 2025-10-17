@@ -9,18 +9,17 @@
   <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
   <style>
     .wrap{max-width:980px;margin:0 auto}
+    .panel{background:linear-gradient(180deg, rgba(21,29,47,.9), rgba(21,29,47,.78));border:1px solid var(--line);border-radius:16px;padding:16px}
     .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
     .search{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:rgba(21,29,47,.6)}
-    .search input{border:0;outline:none;background:transparent;color:var(--text);min-width:260px}
-    .panel{background:linear-gradient(180deg, rgba(21,29,47,.9), rgba(21,29,47,.78));border:1px solid var(--line);border-radius:16px;padding:16px}
+    .search input{border:0;outline:none;background:transparent;color:var(--text);min-width:240px}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
     .muted{color:var(--muted)}
     select, input[type="text"]{padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(21,29,47,.6);color:var(--text);width:100%}
-    .help{font-size:13px;color:var(--muted);margin-top:8px}
-    .status-ok{color:var(--win)} .status-bad{color:var(--loss)}
-    .pill{cursor:default}
-    .kv{display:flex;justify-content:space-between;gap:10px;margin:6px 0}
+    .kv{display:flex;justify-content:space-between;margin:6px 0}
+    .banner{padding:10px 12px;border-radius:10px;background:#4b1f1f;border:1px solid #ff6b6b;color:#fff;margin-bottom:12px;display:none}
+    .ok{background:#153b2b;border-color:#2ecc71}
   </style>
 </head>
 <body>
@@ -40,7 +39,7 @@
 
   <main class="container">
     <div class="wrap">
-      <!-- SELECCIÓN -->
+      <div id="authError" class="banner"></div>
       <section class="section panel">
         <h2 style="margin-top:0">Selecciona tu partida</h2>
         <div class="toolbar">
@@ -57,10 +56,9 @@
             <select id="matchSelect"></select>
           </div>
         </div>
-        <div class="help">Tip: escribe tu apellido para filtrar rápido. La lista se llena desde <code>/calendario</code> y, al guardar, se crea/actualiza <code>/pairings</code>.</div>
+        <div class="muted">La lista se llena desde <code>/calendario</code>. Al guardar, se crea/actualiza <code>/pairings</code>.</div>
       </section>
 
-      <!-- MARCADORES -->
       <section class="section panel">
         <h2 style="margin-top:0">Marcadores por juego (obligatorios)</h2>
         <div class="row-3">
@@ -92,8 +90,7 @@
             </select>
           </div>
         </div>
-        <div class="help">⚠️ En esta liga se juegan SIEMPRE los 3 juegos. No deja guardar si falta alguno.</div>
-
+        <div class="muted" id="roundWarning"></div>
         <div class="row" style="margin-top:12px">
           <div class="input">
             <label class="small muted">Reportado por (nombre)</label>
@@ -111,7 +108,6 @@
         </div>
       </section>
 
-      <!-- PREVIA -->
       <section class="section panel">
         <h2 style="margin-top:0">Vista previa</h2>
         <div id="preview" class="muted">Selecciona una partida para ver el detalle.</div>
@@ -129,7 +125,6 @@
     const auth = getAuth(app);
     const db   = getDatabase(app);
 
-    // UI
     const Q = document.getElementById('q');
     const ROUND = document.getElementById('roundSelect');
     const MATCH = document.getElementById('matchSelect');
@@ -141,14 +136,15 @@
     const PREVIEW = document.getElementById('preview');
     const REPORTER = document.getElementById('reporter');
     const NOTE = document.getElementById('note');
+    const AUTH_ERR = document.getElementById('authError');
+    const WARN = document.getElementById('roundWarning');
 
-    // Estado
     let uid = null;
-    let calendario = {};      // /calendario
-    let pairingsById = {};    // /pairings
-    let matchLookup = {};     // key -> {round, white, black, pairingId?}
+    let calendario = {};
+    let pairingsById = {};
+    let matchLookup = {};
+    let schedule = {};
 
-    // Helpers
     const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
     const vsLabel = (w,b)=> `${w} vs ${b}`;
     function calcWinner(g1,g2,g3){
@@ -163,43 +159,40 @@
       if(pts.black>pts.white) return 'black';
       return 'draw';
     }
-    function safeKey(s){
-      return norm(s).replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
-    }
+    function safeKey(s){ return norm(s).replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
     function makePairKey(round, white, black){
-      // ordenamos alfabéticamente para que sea estable si cambian colores
-      const a = safeKey(white), b = safeKey(black);
-      const [x,y] = [a,b].sort();
+      const a=safeKey(white), b=safeKey(black); const [x,y]=[a,b].sort();
       return `r${round}_${x}__${y}`;
     }
     function findExistingPair(round, white, black){
-      // busca en /pairings por coincidencia de nombres (sin acentos)
-      const A = norm(white), B = norm(black);
+      const A=norm(white), B=norm(black);
       for(const [id,p] of Object.entries(pairingsById)){
         if(Number(p.round)!==Number(round)) continue;
-        const pw = norm(p.white||''), pb = norm(p.black||'');
+        const pw=norm(p.white||''), pb=norm(p.black||'');
         if((pw===A && pb===B) || (pw===B && pb===A)) return id;
-      }
-      return null;
+      } return null;
+    }
+    function rondaCerrada(r){
+      const end = schedule[String(r)]?.endAt || null;
+      return end ? (Date.now() > end) : false;
     }
 
-    // Auth anónima
-    signInAnonymously(auth).catch(console.error);
-    onAuthStateChanged(auth, (user)=>{ uid = user?.uid || null; });
+    signInAnonymously(auth).catch((e)=>{
+      AUTH_ERR.style.display='block';
+      AUTH_ERR.innerHTML = '⚠️ No se pudo iniciar sesión anónima. El organizador debe habilitar <b>Authentication → Sign-in method → Anonymous</b> en Firebase.<br><small>Código: '+e.code+'</small>';
+    });
+    onAuthStateChanged(auth, (user)=>{ uid = user?.uid || null; if(uid){ AUTH_ERR.style.display='none'; AUTH_ERR.textContent=''; } });
 
-    // Suscripciones
+    onValue(ref(db,'tournament/rounds'), s=>{ schedule = s.val()||{}; });
     onValue(ref(db,'calendario'), snap=>{ calendario = snap.val()||{}; renderRounds(); renderMatches(); });
     onValue(ref(db,'pairings'),   snap=>{ pairingsById = snap.val()||{}; renderRounds(); renderMatches(); });
 
-    // Render Rondas (desde /calendario)
     function renderRounds(){
       const rounds = Object.keys(calendario).filter(k=>/^ronda\d+$/i.test(k))
         .map(k=>Number(k.replace(/\D/g,''))).sort((a,b)=>a-b);
       ROUND.innerHTML = rounds.map(r=>`<option value="${r}">Ronda ${r}</option>`).join('');
       if(!ROUND.value && rounds.length) ROUND.value = String(rounds[0]);
     }
-
-    // Render Partidas (desde /calendario + filtro de búsqueda)
     function renderMatches(){
       const r = Number(ROUND.value);
       const key = `ronda${r}`;
@@ -216,21 +209,17 @@
         return `<option value="${keyVal}">${vsLabel(m.p1_name, m.p2_name)} — [${tag}]</option>`;
       }).join('');
       renderPreview();
+      WARN.innerHTML = rondaCerrada(r) ? '⏱️ <b>Ojo:</b> La ronda está marcada como <b>cerrada</b>. Aún puedes reportar, pero el organizador puede anular reportes tardíos.' : '';
     }
-
     function renderPreview(){
       const id = MATCH.value;
       if(!id){ PREVIEW.textContent = 'Selecciona una partida.'; return; }
       const m = matchLookup[id];
       if(!m){ PREVIEW.textContent = 'Selecciona una partida.'; return; }
-
-      // Si existe en /pairings, muestra estado actual
-      let p = null;
-      if(m.pairingId) p = pairingsById[m.pairingId];
-
+      let p = m.pairingId ? pairingsById[m.pairingId] : null;
       PREVIEW.innerHTML = `
         <div class="kv"><span>Ronda</span> <strong>${m.round}</strong></div>
-        <div class="kv"><span>Partida</span> <strong>${vsLabel(m.white, m.black)}</strong></div>
+        <div class="kv"><span>Partida</span> <strong>${m.white} vs ${m.black}</strong></div>
         <div class="kv"><span>Estado</span> <strong>${p?.result || 'pendiente'}</strong></div>
         <div class="kv"><span>Última actualización</span> <strong>${p?.updatedAt ? new Date(p.updatedAt).toLocaleString() : '—'}</strong></div>
       `;
@@ -239,13 +228,17 @@
       G3.value = p?.game3 || '';
     }
 
-    // Eventos UI
     Q.addEventListener('input', renderMatches);
     ROUND.addEventListener('change', renderMatches);
     MATCH.addEventListener('change', renderPreview);
 
-    // Guardar resultado (crea/actualiza /pairings)
     BTN_SAVE.addEventListener('click', async ()=>{
+      STATUS.textContent='';
+      if(!uid){
+        AUTH_ERR.style.display='block';
+        AUTH_ERR.innerHTML='⚠️ No hay sesión activa. Intenta recargar. Si persiste, el organizador debe habilitar <b>Anonymous auth</b> en Firebase.';
+        return;
+      }
       const key = MATCH.value;
       if(!key){ STATUS.textContent = 'Selecciona una partida.'; return; }
       const m = matchLookup[key];
@@ -253,20 +246,16 @@
 
       const g1 = G1.value, g2 = G2.value, g3 = G3.value;
       if(!g1 || !g2 || !g3){
-        STATUS.innerHTML = '<span class="status-bad">Debes seleccionar los 3 juegos (G1, G2, G3).</span>';
+        STATUS.innerHTML = '<span style="color:#ff6b6b">Debes seleccionar los 3 juegos (G1, G2, G3).</span>';
         return;
       }
       const overall = calcWinner(g1,g2,g3);
       if(!overall){
-        STATUS.innerHTML = '<span class="status-bad">Completa todos los juegos para calcular el resultado global.</span>';
+        STATUS.innerHTML = '<span style="color:#ff6b6b">Completa todos los juegos para calcular el resultado global.</span>';
         return;
       }
 
-      const payloadBase = {
-        white: m.white,
-        black: m.black,
-        round: m.round
-      };
+      const payloadBase = { white: m.white, black: m.black, round: m.round };
       const payload = {
         ...payloadBase,
         game1: g1, game2: g2, game3: g3,
@@ -279,13 +268,15 @@
 
       try{
         const path = `pairings/${m.pairingId || key}`;
-        // Si no existía, crea el nodo primero para asegurar white/black/round
         if(!m.pairingId) await set(ref(db, path), payloadBase);
         await update(ref(db, path), payload);
-        STATUS.innerHTML = `<span class="status-ok">✔️ Resultado guardado (${overall}).</span>`;
+        STATUS.innerHTML = '<span class="ok">✔️ Resultado guardado.</span>';
       }catch(e){
         console.error(e);
-        STATUS.innerHTML = `<span class="status-bad">Error: ${e.message}</span>`;
+        let msg = e?.code==='PERMISSION_DENIED'
+          ? 'El organizador debe permitir escritura en Realtime Database (Rules con ".write": "auth != null" en /pairings) y tener Anonymous Auth habilitada.'
+          : e.message;
+        STATUS.innerHTML = '<span style="color:#ff6b6b">Error: '+msg+'</span>';
       }
     });
   </script>

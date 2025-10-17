@@ -7,6 +7,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css"/>
   <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
+  <style>
+    .countdown-pulse{animation:pulse 1s infinite alternate}
+    @keyframes pulse{from{opacity:.7}to{opacity:1}}
+  </style>
 </head>
 <body>
   <header class="header">
@@ -20,7 +24,16 @@
         <div class="pill"><i class="fa-solid fa-user-group"></i> <span>Jugadores:</span> <strong id="statPlayers">0</strong></div>
         <div class="pill"><i class="fa-solid fa-layer-group"></i> <span>Ronda:</span> <strong id="statRound">1</strong></div>
         <div class="pill"><i class="fa-solid fa-chess-board"></i> <span>Partidas:</span> <strong id="statGames">0</strong></div>
+        <div class="pill countdown-pulse" id="pillCountdown">
+          <i class="fa-regular fa-hourglass-half"></i>
+          <span>Termina en:</span> <strong id="countdown">—</strong>
+        </div>
       </div>
+      <nav style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
+        <a class="pill" href="./calendario.html"><i class="fa-solid fa-calendar"></i> <span>Calendario</span></a>
+        <a class="pill" href="./reportar.html"><i class="fa-solid fa-pen-to-square"></i> <span>Reportar</span></a>
+        <a class="pill" href="./tabla.html"><i class="fa-solid fa-ranking-star"></i> <span>Tabla</span></a>
+      </nav>
     </div>
   </header>
 
@@ -40,14 +53,56 @@
     <div class="container">Actualiza la página para refrescar resultados. Datos en tiempo real vía Firebase.</div>
   </footer>
 
-  <!-- Inicializa Firebase v9 modular y carga app.js -->
   <script type="module">
     import { firebaseConfig } from './firebase-config.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     const app = initializeApp(firebaseConfig);
-    // lo exponemos para app.js
     window.firebaseApp = app;
   </script>
   <script src="./app.js" type="module"></script>
+
+  <script type="module">
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { firebaseConfig } from './firebase-config.js';
+
+    const app = window.firebaseApp || initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+    const EL  = document.getElementById('countdown');
+    let currentRound = 1;
+    let schedule = {};
+    let autoAdvance = false;
+    let timer=null;
+
+    function formatHMS(ms){
+      if(ms<=0) return '00:00:00';
+      const s=Math.floor(ms/1000);
+      const hh=String(Math.floor(s/3600)).padStart(2,'0');
+      const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
+      const ss=String(s%60).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    }
+    function tick(){
+      const end = schedule[String(currentRound)]?.endAt;
+      if(!end){ EL.textContent='—'; return; }
+      const remain = end - Date.now();
+      EL.textContent = formatHMS(remain);
+      if(remain<=0){
+        clearInterval(timer); timer=null;
+        EL.textContent='CERRADA';
+        if(autoAdvance && schedule[String(currentRound+1)]){
+          update(ref(db,'tournament'), { currentRound: currentRound+1 }).catch(console.error);
+        }
+      }
+    }
+    onValue(ref(db,'tournament'), s=>{
+      const t=s.val()||{};
+      currentRound = Number(t.currentRound||1);
+      schedule = t.rounds || {};
+      autoAdvance = !!t.autoAdvance;
+      if(timer){ clearInterval(timer); timer=null; }
+      tick(); timer=setInterval(tick,1000);
+    });
+  </script>
 </body>
 </html>
