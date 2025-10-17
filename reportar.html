@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;800&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {--bg-primary:#0a0e1a;--bg-secondary:#151922;--bg-card:#1a1f2e;--bg-card-hover:#202633;--accent-primary:#00d9ff;--accent-secondary:#0099cc;--accent-glow:rgba(0,217,255,0.3);--text-primary:#e8eaed;--text-secondary:#9aa0a6;--text-muted:#5f6368;--success:#34d399;--warning:#fbbf24;--danger:#ef4444;--shadow-sm:0 2px 4px rgba(0,0,0,0.3);--shadow-md:0 4px 12px rgba(0,0,0,0.4);--shadow-lg:0 8px 24px rgba(0,0,0,0.5);--shadow-glow:0 0 20px var(--accent-glow);--border-radius:12px;--border-color:#2d3748}
+        :root{--bg-primary:#0a0e1a;--bg-secondary:#151922;--bg-card:#1a1f2e;--bg-card-hover:#202633;--accent-primary:#00d9ff;--accent-secondary:#0099cc;--accent-glow:rgba(0,217,255,0.3);--text-primary:#e8eaed;--text-secondary:#9aa0a6;--text-muted:#5f6368;--success:#34d399;--warning:#fbbf24;--danger:#ef4444;--shadow-sm:0 2px 4px rgba(0,0,0,0.3);--shadow-md:0 4px 12px rgba(0,0,0,0.4);--shadow-lg:0 8px 24px rgba(0,0,0,0.5);--shadow-glow:0 0 20px var(--accent-glow);--border-radius:12px;--border-color:#2d3748}
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Open Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.6;min-height:100vh}
         body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at 20% 50%,rgba(0,217,255,0.03) 0%,transparent 50%),radial-gradient(circle at 80% 80%,rgba(0,153,204,0.03) 0%,transparent 50%);pointer-events:none;z-index:0}
@@ -76,11 +76,8 @@
 <body>
     <header class="header">
         <div class="header-content">
-            <h1 class="header-title">
-                <i class="fas fa-clipboard-check"></i>
-                Reportar Resultados
-            </h1>
-            <p class="header-subtitle">Sistema BO3 - 3 Juegos Obligatorios</p>
+            <h1 class="header-title"><i class="fas fa-clipboard-check"></i> Reportar Resultados</h1>
+            <p class="header-subtitle">Sistema BO3 - 3 puntos por victoria, 1 por empate</p>
             <div class="nav-links">
                 <a href="index.html" class="nav-link"><i class="fas fa-home"></i> Inicio</a>
                 <a href="calendario.html" class="nav-link"><i class="fas fa-calendar"></i> Calendario</a>
@@ -92,45 +89,27 @@
 
     <div class="container">
         <div id="alerts-container"></div>
-
         <section class="section">
-            <h2 class="section-title">
-                <i class="section-icon fas fa-hand-pointer"></i>
-                Seleccionar Enfrentamiento
-            </h2>
+            <h2 class="section-title"><i class="section-icon fas fa-hand-pointer"></i> Seleccionar Enfrentamiento</h2>
             <div class="card">
                 <div class="form-group">
-                    <label for="select-round" class="form-label">
-                        <i class="fas fa-layer-group"></i> Ronda
-                    </label>
-                    <select id="select-round" class="form-select">
-                        <option value="">Selecciona una ronda...</option>
-                    </select>
+                    <label for="select-round" class="form-label"><i class="fas fa-layer-group"></i> Ronda</label>
+                    <select id="select-round" class="form-select"><option value="">Selecciona una ronda...</option></select>
                 </div>
                 <div class="form-group">
-                    <label for="select-pairing" class="form-label">
-                        <i class="fas fa-users"></i> Enfrentamiento
-                    </label>
-                    <select id="select-pairing" class="form-select">
-                        <option value="">Primero selecciona una ronda...</option>
-                    </select>
+                    <label for="select-pairing" class="form-label"><i class="fas fa-users"></i> Enfrentamiento</label>
+                    <select id="select-pairing" class="form-select"><option value="">Primero selecciona una ronda...</option></select>
                 </div>
             </div>
         </section>
 
         <section id="report-section" class="section hidden">
-            <h2 class="section-title">
-                <i class="section-icon fas fa-gamepad"></i>
-                Reportar Juegos
-            </h2>
+            <h2 class="section-title"><i class="section-icon fas fa-gamepad"></i> Reportar Juegos</h2>
             <div class="card">
                 <div class="games-container" id="games-container"></div>
                 <div id="summary-container" class="hidden">
                     <div class="summary">
-                        <h3 class="summary-title">
-                            <i class="fas fa-chart-bar"></i>
-                            Resumen del Enfrentamiento
-                        </h3>
+                        <h3 class="summary-title"><i class="fas fa-chart-bar"></i> Resumen del Enfrentamiento</h3>
                         <div class="summary-grid">
                             <div class="summary-item">
                                 <div class="summary-label">Puntos</div>
@@ -150,30 +129,21 @@
                     </div>
                 </div>
                 <div class="btn-group">
-                    <button id="btn-save" class="btn btn-primary" disabled>
-                        <i class="fas fa-save"></i> Guardar Resultado
-                    </button>
-                    <button id="btn-cancel" class="btn btn-secondary">
-                        <i class="fas fa-times"></i> Cancelar
-                    </button>
+                    <button id="btn-save" class="btn btn-primary" disabled><i class="fas fa-save"></i> Guardar Resultado</button>
+                    <button id="btn-cancel" class="btn btn-secondary"><i class="fas fa-times"></i> Cancelar</button>
                 </div>
             </div>
         </section>
 
         <section class="section">
-            <h2 class="section-title">
-                <i class="section-icon fas fa-list-check"></i>
-                Resultados Reportados Recientemente
-            </h2>
-            <div id="results-container">
-                <div class="loading"><div class="spinner"></div></div>
-            </div>
+            <h2 class="section-title"><i class="section-icon fas fa-list-check"></i> Resultados Reportados Recientemente</h2>
+            <div id="results-container"><div class="loading"><div class="spinner"></div></div></div>
         </section>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-        import { getDatabase, ref, get, set, update, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+        import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyC-qg8pD2OMjzOR5iwH_xIYVrwKlckCYGg",
@@ -194,7 +164,6 @@
         let isEditing = false;
         let previousResult = null;
 
-        // Inicializar
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
             setupEventListeners();
@@ -203,7 +172,6 @@
         async function loadData() {
             const jugadoresSnapshot = await get(ref(db, 'jugadores'));
             if (jugadoresSnapshot.exists()) jugadores = jugadoresSnapshot.val();
-            
             const selector = document.getElementById('select-round');
             selector.innerHTML = '<option value="">Selecciona una ronda...</option>';
             for (let i = 1; i <= 21; i++) {
@@ -212,7 +180,6 @@
                 option.textContent = `Ronda ${i}`;
                 selector.appendChild(option);
             }
-            
             listenToResults();
         }
 
@@ -233,7 +200,6 @@
             const pairingsSnapshot = await get(ref(db, `rondas/ronda${roundNum}/partidos`));
             const pairingSelect = document.getElementById('select-pairing');
             pairingSelect.innerHTML = '<option value="">Selecciona un enfrentamiento...</option>';
-            
             if (pairingsSnapshot.exists()) {
                 const partidos = pairingsSnapshot.val();
                 Object.keys(partidos).forEach(key => {
@@ -260,11 +226,7 @@
             if (pairingSnapshot.exists()) {
                 currentPairing = { id: pairingId, ...pairingSnapshot.val() };
                 if (currentPairing.juegos) {
-                    gameResults = [
-                        currentPairing.juegos.juego1 || null,
-                        currentPairing.juegos.juego2 || null,
-                        currentPairing.juegos.juego3 || null
-                    ];
+                    gameResults = [currentPairing.juegos.juego1 || null, currentPairing.juegos.juego2 || null, currentPairing.juegos.juego3 || null];
                     isEditing = true;
                     previousResult = currentPairing.resultado || null;
                 } else {
@@ -296,36 +258,29 @@
             container.innerHTML = '';
             const player1Name = jugadores[currentPairing.jugador1]?.nombre || 'Jugador 1';
             const player2Name = jugadores[currentPairing.jugador2]?.nombre || 'Jugador 2';
-
             for (let i = 0; i < 3; i++) {
                 const card = document.createElement('div');
                 card.className = 'game-card';
                 const gameNum = i + 1;
                 const result = gameResults[i];
                 const isCompleted = result !== null;
-
                 card.innerHTML = `
                     <div class="game-header">
                         <div class="game-number"><i class="fas fa-chess"></i> Juego ${gameNum}</div>
-                        <div class="game-status ${isCompleted ? 'completed' : 'pending'}">
-                            ${isCompleted ? 'Completado' : 'Pendiente'}
-                        </div>
+                        <div class="game-status ${isCompleted ? 'completed' : 'pending'}">${isCompleted ? 'Completado' : 'Pendiente'}</div>
                     </div>
                     <div class="game-buttons">
-                        <button class="game-btn ${result === 'player1' ? 'selected' : ''}" 
-                                data-game="${i}" data-result="player1">
+                        <button class="game-btn ${result === 'player1' ? 'selected' : ''}" data-game="${i}" data-result="player1">
                             <div class="game-btn-label">${player1Name} ganó</div>
-                            <div class="game-btn-points">+1 punto</div>
+                            <div class="game-btn-points">+3 puntos</div>
                         </button>
-                        <button class="game-btn ${result === 'draw' ? 'selected' : ''}" 
-                                data-game="${i}" data-result="draw">
+                        <button class="game-btn ${result === 'draw' ? 'selected' : ''}" data-game="${i}" data-result="draw">
                             <div class="game-btn-label">Empate</div>
-                            <div class="game-btn-points">+0.5 puntos c/u</div>
+                            <div class="game-btn-points">+1 punto c/u</div>
                         </button>
-                        <button class="game-btn ${result === 'player2' ? 'selected' : ''}" 
-                                data-game="${i}" data-result="player2">
+                        <button class="game-btn ${result === 'player2' ? 'selected' : ''}" data-game="${i}" data-result="player2">
                             <div class="game-btn-label">${player2Name} ganó</div>
-                            <div class="game-btn-points">+1 punto</div>
+                            <div class="game-btn-points">+3 puntos</div>
                         </button>
                     </div>
                 `;
@@ -356,18 +311,15 @@
             const player2Name = jugadores[currentPairing.jugador2]?.nombre || 'Jugador 2';
             let player1Points = 0;
             let player2Points = 0;
-
             gameResults.forEach(result => {
-                if (result === 'player1') player1Points += 1;
-                else if (result === 'player2') player2Points += 1;
-                else if (result === 'draw') { player1Points += 0.5; player2Points += 0.5; }
+                if (result === 'player1') player1Points += 3;
+                else if (result === 'player2') player2Points += 3;
+                else if (result === 'draw') { player1Points += 1; player2Points += 1; }
             });
-
             document.getElementById('summary-player1-name').textContent = player1Name;
             document.getElementById('summary-player2-name').textContent = player2Name;
-            document.getElementById('summary-player1-points').textContent = player1Points.toFixed(1);
-            document.getElementById('summary-player2-points').textContent = player2Points.toFixed(1);
-
+            document.getElementById('summary-player1-points').textContent = player1Points;
+            document.getElementById('summary-player2-points').textContent = player2Points;
             let finalResult = '-';
             if (gameResults.every(r => r !== null)) {
                 if (player1Points > player2Points) finalResult = `Victoria de ${player1Name}`;
@@ -384,51 +336,30 @@
                 showAlert('Debes completar los 3 juegos antes de guardar', 'error');
                 return;
             }
-
             try {
                 showAlert('Guardando resultado...', 'info');
-
                 let player1Points = 0;
                 let player2Points = 0;
                 gameResults.forEach(result => {
-                    if (result === 'player1') player1Points += 1;
-                    else if (result === 'player2') player2Points += 1;
-                    else if (result === 'draw') { player1Points += 0.5; player2Points += 0.5; }
+                    if (result === 'player1') player1Points += 3;
+                    else if (result === 'player2') player2Points += 3;
+                    else if (result === 'draw') { player1Points += 1; player2Points += 1; }
                 });
-
-                let player1TournamentPoints = 0;
-                let player2TournamentPoints = 0;
-                if (player1Points > player2Points) { player1TournamentPoints = 3; player2TournamentPoints = 0; }
-                else if (player2Points > player1Points) { player1TournamentPoints = 0; player2TournamentPoints = 3; }
-                else { player1TournamentPoints = 1; player2TournamentPoints = 1; }
-
-                // Si estamos editando, revertir resultado anterior
                 if (isEditing && previousResult) {
                     await revertPlayerStats(currentPairing.jugador1, previousResult.jugador1PuntosTorneo, player1Points > player2Points ? 'win' : player1Points < player2Points ? 'loss' : 'draw');
                     await revertPlayerStats(currentPairing.jugador2, previousResult.jugador2PuntosTorneo, player2Points > player1Points ? 'win' : player2Points < player1Points ? 'loss' : 'draw');
                 }
-
-                // Actualizar partido
                 const partidoRef = ref(db, `rondas/ronda${currentRound}/partidos/${currentPairing.id}`);
                 await update(partidoRef, {
                     juegos: { juego1: gameResults[0], juego2: gameResults[1], juego3: gameResults[2] },
-                    resultado: {
-                        jugador1Puntos: player1Points,
-                        jugador2Puntos: player2Points,
-                        jugador1PuntosTorneo: player1TournamentPoints,
-                        jugador2PuntosTorneo: player2TournamentPoints
-                    },
+                    resultado: { jugador1Puntos: player1Points, jugador2Puntos: player2Points, jugador1PuntosTorneo: player1Points, jugador2PuntosTorneo: player2Points },
                     reportadoEn: Date.now()
                 });
-
-                // Actualizar jugadores
-                await updatePlayerStats(currentPairing.jugador1, player1TournamentPoints, player1Points > player2Points ? 'win' : player1Points < player2Points ? 'loss' : 'draw');
-                await updatePlayerStats(currentPairing.jugador2, player2TournamentPoints, player2Points > player1Points ? 'win' : player2Points < player1Points ? 'loss' : 'draw');
-
+                await updatePlayerStats(currentPairing.jugador1, player1Points, player1Points > player2Points ? 'win' : player1Points < player2Points ? 'loss' : 'draw');
+                await updatePlayerStats(currentPairing.jugador2, player2Points, player2Points > player1Points ? 'win' : player2Points < player1Points ? 'loss' : 'draw');
                 const j1 = jugadores[currentPairing.jugador1]?.nombre;
                 const j2 = jugadores[currentPairing.jugador2]?.nombre;
                 showAlert(`✅ Resultado guardado: ${j1} ${player1Points}-${player2Points} ${j2}`, 'success');
-
                 setTimeout(() => {
                     hideReportSection();
                     document.getElementById('select-round').value = '';
@@ -543,7 +474,7 @@
                             <h4>${player1Name} <span style="color:var(--accent-primary)">${result.resultado.jugador1Puntos}</span> - <span style="color:var(--accent-primary)">${result.resultado.jugador2Puntos}</span> ${player2Name}</h4>
                             <div class="result-details">
                                 <span class="result-detail"><i class="fas fa-layer-group"></i> Ronda ${roundNum}</span>
-                                <span class="result-detail"><i class="fas fa-trophy"></i> ${result.resultado.jugador1PuntosTorneo}-${result.resultado.jugador2PuntosTorneo} puntos</span>
+                                <span class="result-detail"><i class="fas fa-trophy"></i> Puntos del torneo</span>
                                 <span class="result-detail"><i class="far fa-clock"></i> ${new Date(result.reportadoEn).toLocaleString('es-ES')}</span>
                             </div>
                         </div>
