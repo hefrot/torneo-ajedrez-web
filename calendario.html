@@ -1,22 +1,37 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Calendario • Torneo</title>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css">
   <script defer src="https://kit.fontawesome.com/a2e0e6ad4d.js" crossorigin="anonymous"></script>
-  <style>.countdown-pulse{animation:pulse 1s infinite alternate}@keyframes pulse{from{opacity:.7}to{opacity:1}}</style>
+  <style>
+    .countdown-pulse{animation:pulse 1s infinite alternate}
+    @keyframes pulse{from{opacity:.7}to{opacity:1}}
+    .player-pill{display:flex;align-items:center;gap:8px}
+    .flag{font-size:18px}
+    .handle{color:var(--muted);font-size:12px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .btn.small{padding:8px 10px;font-size:12px}
+  </style>
 </head>
 <body>
   <header class="header">
     <div class="header-inner container">
       <div class="logo"></div>
-      <div class="title"><div class="badge">Calendario</div><h1 class="title">Ronda <span id="calTitle">1</span></h1></div>
+      <div class="title">
+        <div class="badge">Calendario</div>
+        <h1 class="title">Ronda <span id="calTitle">1</span></h1>
+      </div>
       <div class="header-stats">
         <a class="pill" href="./index.html"><i class="fa-solid fa-house"></i> <span>Inicio</span></a>
         <a class="pill" href="./reportar.html"><i class="fa-solid fa-pen-to-square"></i> <span>Reportar</span></a>
-        <div class="pill countdown-pulse"><i class="fa-regular fa-hourglass-half"></i><span>Termina en:</span> <strong id="countdown">—</strong></div>
+        <div class="pill countdown-pulse" id="pillCountdown">
+          <i class="fa-regular fa-hourglass-half"></i>
+          <span>Termina en:</span> <strong id="countdown">—</strong>
+        </div>
       </div>
       <nav style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
         <a class="pill" id="btnPrev">⟵ Anterior</a>
@@ -25,23 +40,204 @@
       </nav>
     </div>
   </header>
-  <main class="container"><section class="section"><div id="pairingsGrid" class="grid"></div></section></main>
+
+  <main class="container">
+    <section class="section">
+      <div id="pairingsGrid" class="grid"></div>
+    </section>
+  </main>
+
   <script type="module">
     import { firebaseConfig } from './firebase-config.js';
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
-    const app = initializeApp(firebaseConfig); const db=getDatabase(app);
-    const grid=document.getElementById('pairingsGrid'); const title=document.getElementById('calTitle'); const sel=document.getElementById('roundSelect'); const prev=document.getElementById('btnPrev'); const next=document.getElementById('btnNext'); const EL=document.getElementById('countdown');
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    const grid = document.getElementById('pairingsGrid');
+    const title= document.getElementById('calTitle');
+    const sel  = document.getElementById('roundSelect');
+    const prev = document.getElementById('btnPrev');
+    const next = document.getElementById('btnNext');
+    const EL   = document.getElementById('countdown');
+
     let calendario={}, roundsIdx=[], currentRound=1, schedule={}, autoAdvance=false, timer=null;
-    const fmt=(ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000); const hh=String(Math.floor(s/3600)).padStart(2,'0'); const mm=String(Math.floor((s%3600)/60)).padStart(2,'0'); const ss=String(s%60).padStart(2,'0'); return `${hh}:${mm}:${ss}`; };
-    function paintCountdown(){ const end=schedule[String(currentRound)]?.endAt; if(!end){EL.textContent='—'; return;} const remain=end-Date.now(); EL.textContent=fmt(remain); if(remain<=0){ clearInterval(timer); timer=null; EL.textContent='CERRADA'; if(autoAdvance && schedule[String(currentRound+1)]){ update(ref(db,'tournament'), { currentRound: currentRound+1 }).catch(console.error); } } }
-    function renderRound(r){ const key=`ronda${r}`; const list=calendario[key]||[]; title.textContent=r; grid.innerHTML=''; if(!list.length){ const empty=document.createElement('div'); empty.className='badge'; empty.textContent='No hay partidas para esta ronda'; grid.appendChild(empty); return; } list.forEach(m=>{ const card=document.createElement('div'); card.className='card pairing fadein'; card.innerHTML=`<div class="card-header"><div><strong>Ronda ${r}</strong></div><div class="badge">${m.date||'Fecha por definir'}</div></div><div class="card-body"><div class="players-row"><div>${m.p1_name}</div><div class="vs">VS</div><div>${m.p2_name}</div></div><div class="badge">J1: — • J2: — • J3: —</div></div>`; grid.appendChild(card); }); if(timer){clearInterval(timer); timer=null;} paintCountdown(); timer=setInterval(paintCountdown,1000); }
-    function syncSelect(){ sel.innerHTML=roundsIdx.map(r=>`<option value="${r}">Ronda ${r}</option>`).join(''); sel.value=String(currentRound); }
+    let jugadoresByName = new Map(); // nombre normalizado -> jugador
+
+    // ---- utilidades ----
+    const norm = s => String(s||'').toLowerCase()
+      .normalize('NFD').replace(/\p{Diacritic}/gu,'').trim();
+
+    // map principal de códigos telefónicos a banderas (latam + algunos comunes)
+    const CODE_FLAG = {
+      "1":"🇺🇸", "34":"🇪🇸", "44":"🇬🇧", "33":"🇫🇷", "39":"🇮🇹", "49":"🇩🇪",
+      "52":"🇲🇽", "54":"🇦🇷", "56":"🇨🇱", "57":"🇨🇴", "58":"🇻🇪", "51":"🇵🇪",
+      "55":"🇧🇷", "53":"🇨🇺", "502":"🇬🇹", "503":"🇸🇻", "504":"🇭🇳", "505":"🇳🇮",
+      "506":"🇨🇷", "507":"🇵🇦", "509":"🇭🇹", "593":"🇪🇨", "595":"🇵🇾", "598":"🇺🇾",
+      "591":"🇧🇴", "592":"🇬🇾", "597":"🇸🇷", "507":"🇵🇦", "590":"🇬🇵"
+    };
+    const longestCodeLen = Math.max(...Object.keys(CODE_FLAG).map(c=>c.length));
+
+    function guessFlagFromPhone(raw){
+      if(!raw) return "";
+      let s = String(raw).replace(/\s|-/g,'');
+      if(!s.startsWith('+')) return "";
+      s = s.slice(1); // quitar +
+      // probar prefijo más largo primero
+      for(let len=longestCodeLen; len>=1; len--){
+        const pref = s.slice(0,len);
+        if(CODE_FLAG[pref]) return CODE_FLAG[pref];
+      }
+      return "";
+    }
+    function waLink(raw){
+      if(!raw) return null;
+      let s = String(raw).replace(/\s|-/g,'');
+      if(s.startsWith('+')) s = s.replace('+','');
+      if(!/^\d{6,15}$/.test(s)) return null;
+      return `https://wa.me/${s}`;
+    }
+    function lichessUrl(handle){
+      if(!handle) return null;
+      let h = String(handle).trim();
+      if(h.startsWith('@')) h = h.slice(1);
+      if(!h) return null;
+      return `https://lichess.org/@/${encodeURIComponent(h)}`;
+    }
+
+    // ---- countdown ----
+    const fmt=(ms)=>{
+      if(ms<=0) return '00:00:00';
+      const s=Math.floor(ms/1000);
+      const hh=String(Math.floor(s/3600)).padStart(2,'0');
+      const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
+      const ss=String(s%60).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    };
+    function paintCountdown(){
+      const end = schedule[String(currentRound)]?.endAt;
+      if(!end){ EL.textContent='—'; return; }
+      const remain = end - Date.now();
+      EL.textContent = fmt(remain);
+      if(remain<=0){
+        clearInterval(timer); timer=null;
+        EL.textContent='CERRADA';
+        if(autoAdvance && schedule[String(currentRound+1)]){
+          update(ref(db,'tournament'), { currentRound: currentRound+1 }).catch(console.error);
+        }
+      }
+    }
+
+    // ---- rendering ----
+    function renderRound(r){
+      const key = `ronda${r}`;
+      const list = calendario[key] || [];
+      title.textContent = r;
+      grid.innerHTML='';
+
+      if(!list.length){
+        const empty=document.createElement('div');
+        empty.className='badge';
+        empty.textContent='No hay partidas para esta ronda';
+        grid.appendChild(empty);
+      } else {
+        list.forEach(m=>{
+          // buscar datos de jugadores (wa, lichess) por nombre
+          const P1 = jugadoresByName.get(norm(m.p1_name)) || {};
+          const P2 = jugadoresByName.get(norm(m.p2_name)) || {};
+
+          const flag1 = guessFlagFromPhone(P1.whatsapp);
+          const flag2 = guessFlagFromPhone(P2.whatsapp);
+          const wa1   = waLink(P1.whatsapp);
+          const wa2   = waLink(P2.whatsapp);
+          const li1   = lichessUrl(P1.lichess);
+          const li2   = lichessUrl(P2.lichess);
+
+          const card=document.createElement('div');
+          card.className='card pairing fadein';
+          card.innerHTML = `
+            <div class="card-header">
+              <div><strong>Ronda ${r}</strong></div>
+              <div class="badge">${m.date || 'Fecha por definir'}</div>
+            </div>
+            <div class="card-body">
+              <div class="players-row" style="gap:16px">
+                <div class="player-pill">
+                  <span class="flag">${flag1||''}</span>
+                  <div>
+                    <div>${m.p1_name}</div>
+                    ${li1 ? `<div class="handle"><i class="fa-solid fa-chess-knight"></i> <a target="_blank" rel="noopener" href="${li1}">@${P1.lichess.replace(/^@/,'')}</a></div>` : ''}
+                  </div>
+                </div>
+                <div class="vs">VS</div>
+                <div class="player-pill">
+                  <span class="flag">${flag2||''}</span>
+                  <div>
+                    <div>${m.p2_name}</div>
+                    ${li2 ? `<div class="handle"><i class="fa-solid fa-chess-knight"></i> <a target="_blank" rel="noopener" href="${li2}">@${P2.lichess.replace(/^@/,'')}</a></div>` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div class="actions">
+                ${wa1? `<a class="btn small" target="_blank" rel="noopener" href="${wa1}"><i class="fa-brands fa-whatsapp"></i> ${m.p1_name.split(' ')[0]}</a>`:''}
+                ${wa2? `<a class="btn small" target="_blank" rel="noopener" href="${wa2}"><i class="fa-brands fa-whatsapp"></i> ${m.p2_name.split(' ')[0]}</a>`:''}
+                ${li1? `<a class="btn small ghost" target="_blank" rel="noopener" href="${li1}"><i class="fa-solid fa-chess-knight"></i> Lichess</a>`:''}
+                ${li2? `<a class="btn small ghost" target="_blank" rel="noopener" href="${li2}"><i class="fa-solid fa-chess-knight"></i> Lichess</a>`:''}
+              </div>
+
+              <div class="badge">J1: — • J2: — • J3: —</div>
+            </div>`;
+          grid.appendChild(card);
+        });
+      }
+
+      if(timer){ clearInterval(timer); timer=null; }
+      paintCountdown(); timer=setInterval(paintCountdown,1000);
+    }
+
+    function syncSelect(){
+      sel.innerHTML = roundsIdx.map(r=>`<option value="${r}">Ronda ${r}</option>`).join('');
+      sel.value = String(currentRound);
+    }
+
     sel.addEventListener('change',()=>{ currentRound=Number(sel.value); renderRound(currentRound); });
     prev.addEventListener('click',()=>{ const i=roundsIdx.indexOf(currentRound); if(i>0){ currentRound=roundsIdx[i-1]; sel.value=currentRound; renderRound(currentRound);} });
     next.addEventListener('click',()=>{ const i=roundsIdx.indexOf(currentRound); if(i<roundsIdx.length-1){ currentRound=roundsIdx[i+1]; sel.value=currentRound; renderRound(currentRound);} });
-    onValue(ref(db,'tournament'), s=>{ const t=s.val()||{}; currentRound=Number(t.currentRound||1); schedule=t.rounds||{}; autoAdvance=!!t.autoAdvance; syncSelect(); renderRound(currentRound); });
-    onValue(ref(db,'calendario'), s=>{ calendario=s.val()||{}; roundsIdx=Object.keys(calendario).filter(k=>/^ronda\d+$/i.test(k)).map(k=>Number(k.replace(/\D/g,''))).sort((a,b)=>a-b); syncSelect(); renderRound(currentRound); });
+
+    // ---- data bindings ----
+    onValue(ref(db,'tournament'), s=>{
+      const t=s.val()||{};
+      currentRound = Number(t.currentRound||1);
+      schedule = t.rounds || {};
+      autoAdvance = !!t.autoAdvance;
+      syncSelect(); renderRound(currentRound);
+    });
+
+    onValue(ref(db,'calendario'), s=>{
+      calendario = s.val()||{};
+      roundsIdx = Object.keys(calendario)
+        .filter(k=>/^ronda\d+$/i.test(k))
+        .map(k=>Number(k.replace(/\D/g,'')))
+        .sort((a,b)=>a-b);
+      syncSelect(); renderRound(currentRound);
+    });
+
+    // Cargamos jugadores para enriquecer (whatsapp, lichess)
+    onValue(ref(db,'jugadores'), s=>{
+      const raw = s.val()||{};
+      jugadoresByName.clear();
+      for(const [id,p] of Object.entries(raw)){
+        const name = p.nombre || p.name || p.nombreCompleto || '';
+        if(!name) continue;
+        jugadoresByName.set(norm(name), {
+          whatsapp: p.whatsapp || p.telefono || null,
+          lichess:  p.lichess || null
+        });
+      }
+      renderRound(currentRound);
+    });
   </script>
 </body>
 </html>
