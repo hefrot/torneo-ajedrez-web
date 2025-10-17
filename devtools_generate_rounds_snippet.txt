@@ -1,0 +1,16 @@
+(function(){
+  const startISO = prompt("Fecha/hora de inicio Ronda 1 (ISO con zona horaria, ej. 2025-10-16T00:00:00-06:00):","");
+  if(!startISO) return console.warn("Cancelado");
+  const days = Number(prompt("¿Cuántos días dura cada ronda?","3")||3);
+  const startMs = Date.parse(startISO);
+  if(!isFinite(startMs)) return console.error("Fecha inválida:", startISO);
+  const rounds = {};
+  const oneDay = 24*60*60*1000;
+  for(let r=1;r<=21;r++){
+    const s = startMs + (r-1)*days*oneDay;
+    const e = s + days*oneDay;
+    rounds[String(r)] = { startAt: s, endAt: e };
+  }
+  const payload = { currentRound: 1, autoAdvance: true, rounds };
+  console.log("Copia y pega en /tournament > Import JSON:", JSON.stringify(payload, null, 2));
+})();

@@ -1,0 +1,10 @@
+{
+  "currentRound": 1,
+  "autoAdvance": true,
+  "rounds": {
+    "1": {
+      "startAt": 1760578800000,
+      "endAt": 1760838000000
+    }
+  }
+}
