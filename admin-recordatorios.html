@@ -32,6 +32,24 @@
         .form-group{margin-bottom:1rem}
         .form-group label{color:var(--text-secondary);margin-bottom:0.5rem;font-size:0.9rem;font-weight:600;display:block}
         .form-group select{padding:0.75rem;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:1rem;width:100%;max-width:300px}
+        
+        /* Estilos para la nueva lista de enlaces */
+        #reminder-links-container a {
+            display: block;
+            background: var(--bg-secondary);
+            padding: 0.75rem 1.25rem;
+            margin-top: 0.75rem;
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease-in-out;
+        }
+        #reminder-links-container a:hover {
+            background: var(--bg-primary);
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
     </style>
 </head>
 <body>
@@ -61,11 +79,14 @@
                     <i class="fas fa-paper-plane"></i> Enviar Recordatorios WhatsApp
                 </button>
                 <button id="btn-send-urgent" class="btn btn-danger" disabled style="margin-left:1rem">
-                    <i class="fas fa-exclamation-triangle"></i> Recordatorio Urgente (< 3 horas)
+                    <i class="fas fa-exclamation-triangle"></i> Recordatorio Urgente (&lt; 3 horas)
                 </button>
             </div>
 
             <div id="status-reminder" class="status-message"></div>
+            
+            <div id="reminder-links-container"></div>
+
         </div>
 
         <div class="section">
@@ -105,7 +126,6 @@
         let pendingMatches = [];
         let roundEndTime = null;
 
-        // Inicializar
         document.addEventListener('DOMContentLoaded', async () => {
             await loadPlayers();
             populateRoundSelect();
@@ -131,12 +151,14 @@
 
         function setupEventListeners() {
             document.getElementById('select-round').addEventListener('change', handleRoundChange);
-            document.getElementById('btn-send-reminders').addEventListener('click', () => sendReminders(false));
-            document.getElementById('btn-send-urgent').addEventListener('click', () => sendReminders(true));
+            document.getElementById('btn-send-reminders').addEventListener('click', () => generateReminderLinks(false));
+            document.getElementById('btn-send-urgent').addEventListener('click', () => generateReminderLinks(true));
         }
 
         async function handleRoundChange(e) {
             selectedRound = e.target.value;
+            document.getElementById('reminder-links-container').innerHTML = ''; // Limpiar enlaces al cambiar de ronda
+
             if (!selectedRound) {
                 document.getElementById('pending-container').innerHTML = '<p style="color:var(--text-secondary)">Selecciona una ronda para ver los pendientes</p>';
                 document.getElementById('btn-send-reminders').disabled = true;
@@ -144,14 +166,12 @@
                 return;
             }
 
-            // Cargar tiempo de cierre de ronda
             const roundsSnapshot = await get(ref(db, `tournament/rounds/${selectedRound}`));
             if (roundsSnapshot.exists()) {
                 roundEndTime = roundsSnapshot.val().endAt;
                 updateTimeWarning();
             }
 
-            // Cargar partidos pendientes
             const partidosSnapshot = await get(ref(db, `rondas/ronda${selectedRound}/partidos`));
             if (!partidosSnapshot.exists()) {
                 document.getElementById('pending-container').innerHTML = '<p style="color:var(--text-secondary)">No hay partidos en esta ronda</p>';
@@ -177,14 +197,13 @@
 
             renderPendingMatches();
         }
-
+        
         function updateTimeWarning() {
             const container = document.getElementById('time-warning-container');
             if (!roundEndTime) {
                 container.innerHTML = '';
                 return;
             }
-
             const now = Date.now();
             const remaining = roundEndTime - now;
             const hoursRemaining = remaining / (1000 * 60 * 60);
@@ -214,7 +233,7 @@
             }
 
             let html = '<div class="pending-list">';
-            pendingMatches.forEach((match, idx) => {
+            pendingMatches.forEach((match) => {
                 html += `
                     <div class="pending-item">
                         <div class="player-info">
@@ -233,18 +252,18 @@
             document.getElementById('btn-send-reminders').disabled = false;
             document.getElementById('btn-send-urgent').disabled = false;
         }
-
-        function sendReminders(urgent) {
+        
+        function generateReminderLinks(urgent) {
             if (!selectedRound || pendingMatches.length === 0) {
                 showStatus('No hay partidos pendientes', 'error');
                 return;
             }
 
-            let messagesSent = 0;
+            const linksContainer = document.getElementById('reminder-links-container');
+            linksContainer.innerHTML = '';
             const players = new Set();
 
             pendingMatches.forEach(match => {
-                // Agregar ambos jugadores (sin duplicados)
                 if (match.player1.whatsapp) {
                     players.add(JSON.stringify({
                         nombre: match.player1.nombre,
@@ -261,35 +280,44 @@
                 }
             });
 
-            // Abrir WhatsApp para cada jugador
             const playersArray = Array.from(players).map(p => JSON.parse(p));
             
-            playersArray.forEach((player, index) => {
-                setTimeout(() => {
-                    openWhatsApp(player.whatsapp, player.nombre, player.oponente, urgent);
-                    messagesSent++;
-                }, index * 500); // Esperar 500ms entre cada ventana
+            if (playersArray.length === 0) {
+                showStatus('Ninguno de los jugadores pendientes tiene un número de WhatsApp registrado.', 'error');
+                return;
+            }
+            
+            playersArray.forEach(player => {
+                const url = createWhatsAppUrl(player.whatsapp, player.nombre, player.oponente, urgent);
+                if (url) {
+                    const linkElement = document.createElement('a');
+                    linkElement.href = url;
+                    linkElement.target = '_blank';
+                    linkElement.rel = 'noopener noreferrer';
+                    linkElement.innerHTML = `<i class="fab fa-whatsapp"></i> Enviar recordatorio a <strong>${escapeHtml(player.nombre)}</strong>`;
+                    linksContainer.appendChild(linkElement);
+                }
             });
 
-            showStatus(`✅ Se abrirán ${messagesSent} conversaciones de WhatsApp. Presiona Enter en cada una para enviar.`, 'success');
+            showStatus(`✅ Lista generada para ${playersArray.length} jugadores. Haz clic en cada enlace para enviar.`, 'success');
         }
 
-        function openWhatsApp(phone, playerName, opponent, urgent) {
-            const cleanPhone = phone.replace(/[\s\-\+]/g, '');
+        function createWhatsAppUrl(phone, playerName, opponent, urgent) {
+            const cleanPhone = String(phone).replace(/[\s\-\+]/g, '');
             if (!/^\d{6,15}$/.test(cleanPhone)) {
                 console.error('Número inválido:', phone);
-                return;
+                return null;
             }
 
             let message;
+            const reportUrl = "https://hefrot.github.io/torneo-ajedrez-web/reportar.html";
             if (urgent) {
-                message = `🔥 ¡URGENTE! ${playerName}, quedan menos de 3 horas para cerrar la Ronda ${selectedRound} y aún no has reportado tu partido contra ${opponent}. ¡Repórtalo YA! 🚨 https://hefrot.github.io/torneo-ajedrez-web/reportar.html`;
+                message = `🔥 ¡URGENTE! ${playerName}, quedan menos de 3 horas para cerrar la Ronda ${selectedRound} y aún no has reportado tu partido contra ${opponent}. ¡Repórtalo YA! 🚨 ${reportUrl}`;
             } else {
-                message = `🎯 Hola ${playerName}! Recordatorio del torneo Round Robin: aún no has reportado tu partido de la Ronda ${selectedRound} contra ${opponent}. Por favor repórtalo cuando puedas en: https://hefrot.github.io/torneo-ajedrez-web/reportar.html ⚡`;
+                message = `🎯 Hola ${playerName}! Recordatorio del torneo Round Robin: aún no has reportado tu partido de la Ronda ${selectedRound} contra ${opponent}. Por favor repórtalo cuando puedas en: ${reportUrl} ⚡`;
             }
 
-            const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-            window.open(whatsappUrl, '_blank');
+            return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
         }
 
         function showStatus(msg, type) {
@@ -297,7 +325,6 @@
             el.textContent = msg;
             el.className = `status-message ${type}`;
             el.style.display = 'block';
-            setTimeout(() => el.style.display = 'none', 5000);
         }
 
         function escapeHtml(text) {
@@ -305,8 +332,8 @@
             return String(text).replace(/[&<>"']/g, m => map[m]);
         }
 
-        // Actualizar advertencia cada minuto
         setInterval(updateTimeWarning, 60000);
+
     </script>
 </body>
 </html>
