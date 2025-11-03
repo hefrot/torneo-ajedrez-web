@@ -167,11 +167,23 @@
                     <button onclick="updateCurrentRound()" class="btn-primary">💾 Actualizar Ronda</button>
                     <div id="status-round" class="status-message"></div>
                 </div>
+
                 <div class="section">
                     <h2>⚠️ Zona Peligrosa</h2>
                     <p style="color:var(--text-muted);margin-bottom:1rem">Estas acciones no se pueden deshacer</p>
                     <button onclick="resetAllResults()" class="btn-danger">🗑️ Reiniciar Todos los Resultados</button>
-                </div>
+                    
+                    <p style="color:var(--text-warning); margin-top: 1.5rem; margin-bottom: 0.5rem; font-weight: 600;">
+                        <i class="fas fa-magic"></i> Herramienta de Corrección Masiva
+                    </p>
+                    <p style="color:var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+                        Usa esto UNA SOLA VEZ para arreglar los tiempos de 3 días.
+                        Sobrescribirá todas las rondas (desde la que elijas) para que duren 24 horas cada una.
+                    </p>
+                    <button onclick="fixAllRoundTimings()" style="background:var(--warning); color:var(--bg-primary); padding: 0.75rem 1.5rem; border:none; border-radius: 8px; font-weight: 600; cursor:pointer; transition: transform 0.3s;">
+                        Sobrescribir Tiempos de Rondas (24h)
+                    </button>
+                    </div>
             </div>
 
             <div id="tab-recordatorios" class="tab-content">
@@ -303,7 +315,7 @@
                 });
             });
         }
-       
+        
         function populateRoundSelects() {
             // Se añade el nuevo select de recordatorios a la lista
             const selects = ['pairing-round', 'view-round', 'reminder-select-round'];
@@ -326,6 +338,88 @@
                 document.getElementById('current-round-input').value = snapshot.val();
             }
         }
+        
+        // ===== FUNCIÓN ANTIGUA DE ACTUALIZAR RONDA (AHORA SEPARADA) =====
+        window.updateCurrentRound = async function() {
+            const round = parseInt(document.getElementById('current-round-input').value);
+            if (round < 1 || round > 21) {
+                showStatus('status-round', 'Número de ronda inválido', 'error');
+                return;
+            }
+            try {
+                await set(ref(db, 'tournament/currentRound'), round);
+                showStatus('status-round', '✅ Ronda actualizada correctamente', 'success');
+            } catch (error) {
+                showStatus('status-round', '❌ Error al actualizar ronda', 'error');
+            }
+        }
+        
+        // ▼▼▼ FUNCIÓN NUEVA PARA EL BOTÓN DE ARREGLO MASIVO ▼▼▼
+        window.fixAllRoundTimings = async function() {
+            const defaultRound = document.getElementById('current-round-input').value || '7';
+            
+            const startRound = Number(prompt(`¿Desde qué ronda quieres empezar a sobrescribir? (ej. 7, 8, etc.)`, defaultRound));
+            if (!startRound || startRound < 1 || startRound > 21) {
+                return showStatus('status-round', 'Número de ronda inválido', 'error');
+            }
+
+            // Sugiere la hora actual en formato ISO (ej. 2025-11-03T13:00:00-08:00)
+            // Asumiremos zona horaria -08:00 (PST) como ejemplo, ajústalo si es necesario.
+            const now = new Date();
+            const offset = now.getTimezoneOffset();
+            const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0');
+            const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, '0');
+            const offsetSign = offset > 0 ? '-' : '+';
+            const timezoneStr = `${offsetSign}${offsetHours}:${offsetMinutes}`; // ej. -08:00
+            
+            const nowISO = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + 'T' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':00' + timezoneStr;
+            
+            const startTimeISO = prompt(`¿Cuándo quieres que INICIE la Ronda ${startRound}? (Formato ISO: AAAA-MM-DDTHH:MM:SS-08:00)`, nowISO);
+            if (!startTimeISO) {
+                return showStatus('status-round', 'Operación cancelada', 'info');
+            }
+
+            const startTimeMs = Date.parse(startTimeISO);
+            if (isNaN(startTimeMs)) {
+                return showStatus('status-round', 'Fecha inválida. Copia el formato exacto.', 'error');
+            }
+            
+            if (!confirm(`CONFIRMAR:\n\nVas a sobrescribir TODAS las rondas desde la ${startRound} hasta la 21.\nCada ronda durará 24 horas, una después de la otra.\n\n¿Estás seguro? Esta acción es masiva.`)) {
+                return showStatus('status-round', 'Operación cancelada', 'info');
+            }
+
+            showStatus('status-round', 'Procesando... esto puede tardar un momento.', 'info');
+
+            const updates = {};
+            const durationMs = 24 * 60 * 60 * 1000; // 24 HORAS
+            let currentRoundStartMs = startTimeMs;
+
+            for (let r = startRound; r <= 21; r++) {
+                const s = currentRoundStartMs;
+                const e = s + durationMs;
+                
+                // Establece startAt y endAt para esta ronda
+                updates[`tournament/rounds/${r}/startAt`] = s;
+                updates[`tournament/rounds/${r}/endAt`] = e;
+                
+                // La siguiente ronda empieza cuando esta termina
+                currentRoundStartMs = e; 
+            }
+            
+            // También actualiza la ronda actual a la que seleccionaste
+            updates[`tournament/currentRound`] = startRound;
+
+            try {
+                await update(ref(db), updates);
+                showStatus('status-round', `✅ ¡ÉXITO! Rondas ${startRound}-21 sobrescritas a 24 horas.`, 'success');
+                document.getElementById('current-round-input').value = startRound; // Actualiza el campo
+            } catch (error) {
+                console.error("Error masivo al actualizar rondas:", error);
+                showStatus('status-round', '❌ Error al sobrescribir. Revisa la consola.', 'error');
+            }
+        }
+        // ▲▲▲ FIN DE LA FUNCIÓN NUEVA ▲▲▲
+
 
         // ===== LÓGICA DE JUGADORES, PAREOS Y RONDAS (EXISTENTE) =====
         function loadPlayers() {
@@ -350,19 +444,167 @@
             });
             container.innerHTML = html + '</div>';
         }
-        function populatePlayerSelects(playersData) { /* ... */ }
-        document.getElementById('add-player-form').addEventListener('submit', async(e) => { /* ... */ });
-        window.deletePlayer = async function(id, name) { /* ... */ }
-        window.openEditModal = async function(playerId) { /* ... */ }
-        window.closeEditModal = function() { /* ... */ }
-        // Y el resto de la lógica de tu panel...
+        
+        function populatePlayerSelects(playersData) {
+            if (!playersData) return;
+            const players = Object.entries(playersData).map(([id, p]) => ({ id, ...p }));
+            players.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+            const selects = ['player1', 'player2'];
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                select.innerHTML = '<option value="">Seleccionar...</option>';
+                players.forEach(p => {
+                    select.innerHTML += `<option value="${p.id}">${escapeHtml(p.nombre)} (${p.eloActual || p.elo || 1500})</option>`;
+                });
+            });
+        }
+        
+        document.getElementById('add-player-form').addEventListener('submit', async(e) => {
+             e.preventDefault();
+            const name = document.getElementById('player-name').value.trim();
+            const elo = parseInt(document.getElementById('player-elo').value);
+            const whatsapp = document.getElementById('player-whatsapp').value.trim();
+            const lichess = document.getElementById('player-lichess').value.trim();
+            try {
+                const newPlayerRef = push(ref(db, 'jugadores'));
+                await set(newPlayerRef, {
+                    nombre: name, elo: elo, eloActual: elo, whatsapp: whatsapp || null, lichess: lichess || null,
+                    puntos: 0, games: 0, wins: 0, draws: 0, losses: 0
+                });
+                showStatus('status-player', '✅ Jugador agregado', 'success');
+                e.target.reset();
+                document.getElementById('player-elo').value = 1500;
+            } catch (error) { showStatus('status-player', '❌ Error al agregar', 'error'); }
+        });
+        
+        window.deletePlayer = async function(id, name) {
+            if (!confirm(`¿Eliminar a ${name}?`)) return;
+            try {
+                await remove(ref(db, `jugadores/${id}`));
+                showStatus('status-player', '✅ Jugador eliminado', 'success');
+            } catch (error) { showStatus('status-player', '❌ Error al eliminar', 'error'); }
+        }
+        
+        // --- Lógica de Edición de Jugador ---
+        const editPuntosInput = document.getElementById('edit-puntos');
+        const editGamesInput = document.getElementById('edit-games');
+        const editWinsInput = document.getElementById('edit-wins');
+        const editDrawsInput = document.getElementById('edit-draws');
+        const editLossesInput = document.getElementById('edit-losses');
+        const editTotalGamesInput = document.getElementById('edit-total-games');
+        
+        function updateCalculatedFields() {
+            const wins = parseInt(editWinsInput.value) || 0;
+            const draws = parseInt(editDrawsInput.value) || 0;
+            const losses = parseInt(editLossesInput.value) || 0;
+            const totalGames = wins + draws + losses;
+            const totalRounds = Math.floor(totalGames / 3); // Asumiendo 3 juegos por ronda
+            const totalPoints = (wins * 3) + (draws * 1);
+            editTotalGamesInput.value = totalGames;
+            editGamesInput.value = totalRounds;
+            editPuntosInput.value = totalPoints;
+        }
+        editWinsInput.addEventListener('input', updateCalculatedFields);
+        editDrawsInput.addEventListener('input', updateCalculatedFields);
+        editLossesInput.addEventListener('input', updateCalculatedFields);
+
+        window.openEditModal = async function(playerId) {
+            currentEditingPlayerId = playerId;
+            const snapshot = await get(ref(db, `jugadores/${playerId}`));
+            if (snapshot.exists()) {
+                const player = snapshot.val();
+                document.getElementById('edit-name').value = player.nombre || '';
+                document.getElementById('edit-wins').value = player.wins || 0;
+                document.getElementById('edit-draws').value = player.draws || 0;
+                document.getElementById('edit-losses').value = player.losses || 0;
+                updateCalculatedFields();
+                document.getElementById('edit-modal').classList.add('active');
+            }
+        }
+        window.closeEditModal = function() {
+            document.getElementById('edit-modal').classList.remove('active');
+            currentEditingPlayerId = null;
+        }
+        document.getElementById('edit-player-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentEditingPlayerId) return;
+            updateCalculatedFields(); // Recalcular
+            const updatedData = {
+                nombre: document.getElementById('edit-name').value,
+                puntos: parseInt(document.getElementById('edit-puntos').value),
+                games: parseInt(document.getElementById('edit-games').value),
+                wins: parseInt(document.getElementById('edit-wins').value),
+                draws: parseInt(document.getElementById('edit-draws').value),
+                losses: parseInt(document.getElementById('edit-losses').value),
+                ultimaActualizacion: Date.now()
+            };
+            try {
+                await update(ref(db, `jugadores/${currentEditingPlayerId}`), updatedData);
+                showStatus('status-edit', '✅ Jugador actualizado', 'success');
+                setTimeout(closeEditModal, 1500);
+            } catch (error) { showStatus('status-edit', '❌ Error al actualizar', 'error'); }
+        });
+        
+        // ===== LÓGICA DE PAREOS (EXISTENTE) =====
+        document.getElementById('create-pairing-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const round = document.getElementById('pairing-round').value;
+            const p1 = document.getElementById('player1').value;
+            const p2 = document.getElementById('player2').value;
+            if (!round || !p1 || !p2) { showStatus('status-pairing', 'Completa los campos', 'error'); return; }
+            if (p1 === p2) { showStatus('status-pairing', 'Jugadores iguales', 'error'); return; }
+            try {
+                const partidoRef = push(ref(db, `rondas/ronda${round}/partidos`));
+                await set(partidoRef, { jugador1: p1, jugador2: p2, createdAt: Date.now() });
+                showStatus('status-pairing', '✅ Pareo creado', 'success');
+                e.target.reset();
+            } catch (error) { showStatus('status-pairing', '❌ Error al crear pareo', 'error'); }
+        });
+
+        document.getElementById('view-round').addEventListener('change', loadPairingsForRound);
+
+        async function loadPairingsForRound() {
+            const round = document.getElementById('view-round').value;
+            if (!round) return;
+            const snapshot = await get(ref(db, `rondas/ronda${round}/partidos`));
+            const container = document.getElementById('pairings-list');
+            if (!snapshot.exists()) {
+                container.innerHTML = '<p style="color:var(--text-muted)">No hay pareos</p>'; return;
+            }
+            const partidos = snapshot.val();
+            const jugadores = todosLosJugadores;
+            let html = '<div class="pairing-grid">';
+            Object.entries(partidos).forEach(([id, p]) => {
+                const j1 = jugadores[p.jugador1];
+                const j2 = jugadores[p.jugador2];
+                if (!j1 || !j2) return;
+                html += `
+                    <div class="pairing-item">
+                        <div class="pairing-players">
+                            <span>${escapeHtml(j1.nombre)}</span> <span class="vs">VS</span> <span>${escapeHtml(j2.nombre)}</span>
+                        </div>
+                        <button class="btn-small danger" onclick="deletePairing('${round}','${id}')"><i class="fas fa-trash"></i> Eliminar</button>
+                    </div>`;
+            });
+            container.innerHTML = html + '</div>';
+        }
+
+        window.deletePairing = async function(round, id) {
+            if (!confirm('¿Eliminar este pareo?')) return;
+            try {
+                await remove(ref(db, `rondas/ronda${round}/partidos/${id}`));
+                loadPairingsForRound();
+                showStatus('status-pairing', '✅ Pareo eliminado', 'success');
+            } catch (error) { showStatus('status-pairing', '❌ Error al eliminar', 'error'); }
+        }
+
+        window.resetAllResults = async function() { /* ... (Tu función existente va aquí) ... */ }
 
 
-        // ===== NUEVA LÓGICA PARA LA PESTAÑA DE RECORDATORIOS =====
+        // ===== LÓGICA PESTAÑA RECORDATORIOS (EXISTENTE) =====
         let reminder_pendingMatches = [];
         let reminder_selectedRound = null;
-        let reminder_roundEndTime = null;
-
+        
         function setupReminderListeners() {
             document.getElementById('reminder-select-round').addEventListener('change', reminder_handleRoundChange);
             document.getElementById('btn-send-reminders').addEventListener('click', () => reminder_generateLinks(false));
@@ -372,17 +614,35 @@
         async function reminder_handleRoundChange(e) {
             reminder_selectedRound = e.target.value;
             document.getElementById('reminder-links-container').innerHTML = '';
+            const container = document.getElementById('reminder-time-warning');
 
             if (!reminder_selectedRound) {
                 document.getElementById('reminder-pending-container').innerHTML = '<p style="color:var(--text-secondary)">Selecciona una ronda</p>';
                 document.getElementById('btn-send-reminders').disabled = true;
                 document.getElementById('btn-send-urgent').disabled = true;
+                container.innerHTML = '';
                 return;
+            }
+            
+            // Cargar advertencia de tiempo
+            const timeSnap = await get(ref(db, `tournament/rounds/${reminder_selectedRound}/endAt`));
+            if(timeSnap.exists()) {
+                const remaining = timeSnap.val() - Date.now();
+                const hoursRemaining = remaining / (1000 * 60 * 60);
+                if (remaining <= 0) {
+                    container.innerHTML = '<div class="time-warning urgent"><i class="fas fa-exclamation-triangle"></i> ¡La ronda ya finalizó!</div>';
+                } else if (hoursRemaining < 3) {
+                    container.innerHTML = `<div class="time-warning urgent"><i class="fas fa-exclamation-triangle"></i> ¡Quedan menos de 3 horas!</div>`;
+                } else {
+                    container.innerHTML = `<div class="time-warning"><i class="fas fa-clock"></i> Quedan ${Math.floor(hoursRemaining)} horas</div>`;
+                }
+            } else {
+                container.innerHTML = '';
             }
 
             const partidosSnapshot = await get(ref(db, `rondas/ronda${reminder_selectedRound}/partidos`));
             if (!partidosSnapshot.exists()) {
-                document.getElementById('reminder-pending-container').innerHTML = '<p style="color:var(--text-secondary)">No hay partidos en esta ronda.</p>';
+                document.getElementById('reminder-pending-container').innerHTML = '<p style="color:var(--text-secondary)">No hay partidos.</p>';
                 return;
             }
 
@@ -390,7 +650,7 @@
             reminder_pendingMatches = [];
 
             Object.values(partidos).forEach(partido => {
-                if (!partido.resultado) { // Si no tiene resultado, está pendiente
+                if (!partido.resultado) {
                     const j1 = todosLosJugadores[partido.jugador1];
                     const j2 = todosLosJugadores[partido.jugador2];
                     if (j1 && j2) {
@@ -427,49 +687,40 @@
             const linksContainer = document.getElementById('reminder-links-container');
             linksContainer.innerHTML = '';
             const players = new Set();
-
             reminder_pendingMatches.forEach(match => {
                 if (match.player1.whatsapp) players.add(JSON.stringify({ nombre: match.player1.nombre, whatsapp: match.player1.whatsapp, oponente: match.player2.nombre }));
                 if (match.player2.whatsapp) players.add(JSON.stringify({ nombre: match.player2.nombre, whatsapp: match.player2.whatsapp, oponente: match.player1.nombre }));
             });
-
             const playersArray = Array.from(players).map(p => JSON.parse(p));
             if (playersArray.length === 0) {
-                showStatus('status-reminder', 'Ningún jugador pendiente tiene WhatsApp registrado.', 'error');
-                return;
+                showStatus('status-reminder', 'Ningún jugador tiene WhatsApp.', 'error'); return;
             }
-            
             playersArray.forEach(player => {
                 const url = reminder_createWhatsAppUrl(player.whatsapp, player.nombre, player.oponente, urgent);
                 if (url) {
                     const linkElement = document.createElement('a');
-                    linkElement.href = url;
-                    linkElement.target = '_blank';
-                    linkElement.rel = 'noopener noreferrer';
+                    linkElement.href = url; linkElement.target = '_blank'; linkElement.rel = 'noopener noreferrer';
                     linkElement.innerHTML = `<i class="fab fa-whatsapp"></i> Enviar a <strong>${escapeHtml(player.nombre)}</strong>`;
                     linksContainer.appendChild(linkElement);
                 }
             });
-
             showStatus('status-reminder', `✅ Lista generada para ${playersArray.length} jugadores.`, 'success');
         }
 
         function reminder_createWhatsAppUrl(phone, playerName, opponent, urgent) {
             const cleanPhone = String(phone).replace(/[\s\-\+]/g, '');
             if (!/^\d{6,15}$/.test(cleanPhone)) return null;
-            
             const reportUrl = "https://hefrot.github.io/torneo-ajedrez-web/reportar.html";
             let message = urgent 
                 ? `🔥 ¡URGENTE! ${playerName}, quedan menos de 3 horas para cerrar la Ronda ${reminder_selectedRound} y aún no has reportado tu partido contra ${opponent}. ¡Repórtalo YA! 🚨 ${reportUrl}`
                 : `🎯 Hola ${playerName}! Recordatorio del torneo: aún no has reportado tu partido de la Ronda ${reminder_selectedRound} contra ${opponent}. Por favor repórtalo en: ${reportUrl} ⚡`;
-
             return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
         }
-
 
         // ===== FUNCIONES AUXILIARES GENERALES =====
         function showStatus(id, msg, type) {
             const el = document.getElementById(id);
+            if (!el) return;
             el.textContent = msg;
             el.className = `status-message ${type}`;
             el.style.display = 'block';
@@ -481,13 +732,6 @@
             const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
             return text.replace(/[&<>"']/g, m => map[m]);
         }
-        
-        // (El resto de tus funciones existentes para Jugadores, Pareos y Rondas irían aquí)
-        // Por ejemplo:
-        // window.updateCurrentRound = async function() { ... }
-        // document.getElementById('edit-player-form').addEventListener('submit', async (e) => { ... });
-        // etc.
-
     </script>
 </body>
 </html>
