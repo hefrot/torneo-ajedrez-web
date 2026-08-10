@@ -14,4 +14,13 @@
 - Four legacy tournament Celery tasks gated reversibly.
 - Shared cis-whatsapp bridge preserved and healthy.
 
-Owner UX review still required before public cutover.
+## Owner UX review notes
+
+Before public cutover, prefer player-facing copy over internal recovery language:
+
+- `Historia recuperada · nueva liga pendiente` -> `Inscripciones abiertas`.
+- `identidades históricas` -> `Jugadores históricos`.
+- Hide or collapse public highlight cards that have no verified value instead of showing several `SIN DATA` cards.
+- Keep the official standings empty until the new league starts; historical Community XP remains separate.
+
+Owner visual approval still required before public cutover.
