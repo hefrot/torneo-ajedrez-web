@@ -93,7 +93,7 @@ export function submitVerifiedRegistration(
         "INSERT INTO players (id,name,platform,username,whatsapp,country,registration_status) VALUES (?,?,?,?,?,?,'registered')"
       ).run(playerId,name,platform,username,input.whatsapp || null,input.country || null);
       db.prepare(
-        "INSERT INTO player_accounts (id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?,?,?,?,'verified','web_registration',?,?,?,?,?)"
+        "INSERT INTO player_accounts (id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?,?,?,?,'verified','web_registration',?,?,?,?)"
       ).run(
         'ACC-' + idFactory().slice(0, 12),playerId,platform,username,usernameNormalized,requestId,
         verification.verificationSource,verification.verifiedAt,
@@ -110,7 +110,7 @@ export function submitVerifiedRegistration(
       `).run(username,usernameNormalized,verification.verificationSource,verification.verifiedAt,playerId,platform,usernameNormalized);
       if (!updated.changes) {
         db.prepare(
-          "INSERT INTO player_accounts (id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?,?,?,?,'verified','web_registration',?,?,?,?,?)"
+          "INSERT INTO player_accounts (id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?,?,?,?,'verified','web_registration',?,?,?,?)"
         ).run(
           'ACC-' + idFactory().slice(0, 12),playerId,platform,username,usernameNormalized,requestId,
           verification.verificationSource,verification.verifiedAt,
