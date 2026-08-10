@@ -1,6 +1,12 @@
 const BASE = 'https://api.chess.com/pub';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+const providerError = async response => {
+  const error = new Error(`Chess.com ${response.status}: ${await response.text()}`);
+  error.status = response.status;
+  return error;
+};
+
 export class ChessComClient {
   constructor({
     userAgent = process.env.CHESSCOM_USER_AGENT,
@@ -31,9 +37,7 @@ export class ChessComClient {
         response = await requestOnce();
       }
 
-      if (!response.ok) {
-        throw new Error(`Chess.com ${response.status}: ${await response.text()}`);
-      }
+      if (!response.ok) throw await providerError(response);
 
       await this.sleep(this.throttleMs);
       return response.json();
@@ -42,6 +46,10 @@ export class ChessComClient {
     const next = this.queue.then(task, task);
     this.queue = next.then(() => undefined, () => undefined);
     return next;
+  }
+
+  getProfile(username) {
+    return this.request(`/player/${encodeURIComponent(username)}`);
   }
 
   getStats(username) {
