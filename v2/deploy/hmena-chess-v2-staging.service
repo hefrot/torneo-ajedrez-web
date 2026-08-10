@@ -1,0 +1,19 @@
+[Unit]
+Description=HMENA Chess League V2 loopback staging
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/hmena-chess-v2-staging/v2
+EnvironmentFile=/etc/hmena-chess-v2-staging.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

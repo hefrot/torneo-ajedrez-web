@@ -9,6 +9,7 @@ test('WhatsApp adapter uses audited /send contract for groups', async () => {
     bridgeToken: 'test-token',
     authHeader: 'X-Test-Key',
     groupId: 'example@g.us',
+    dryRun: false,
     fetchImpl: async (url, options) => {
       request = { url, options };
       return {
@@ -29,4 +30,13 @@ test('WhatsApp adapter uses audited /send contract for groups', async () => {
     message: 'Hola ajedrez',
   });
   assert.deepEqual(result, { ok: true });
+});
+
+test('WhatsApp dry-run never calls the bridge and returns deterministic hashes', async () => {
+  let called=false;
+  const result=await sendGroupMessage('Mensaje de prueba',{bridgeUrl:'http://127.0.0.1:3010',groupId:'private-example@g.us',dryRun:true,fetchImpl:async()=>{called=true;throw new Error('must not call');}});
+  assert.equal(called,false);
+  assert.equal(result.dryRun,true);
+  assert.match(result.targetHash,/^[a-f0-9]{64}$/);
+  assert.match(result.messageHash,/^[a-f0-9]{64}$/);
 });

@@ -13,3 +13,7 @@ export function openDatabase(path = process.env.DATABASE_PATH || './data/league.
 export function listPlayers(db,{registeredOnly=false}={}){const where=registeredOnly?" WHERE registration_status='registered'":'';return db.prepare(`SELECT * FROM players${where} ORDER BY name`).all();}
 export function loadGames(db){return db.prepare(`SELECT id, player1_id AS player1Id, player2_id AS player2Id, result, status FROM games`).all();}
 export function loadSeries(db){return db.prepare(`SELECT id, player1_id AS player1Id, player2_id AS player2Id, games_required AS gamesRequired, games_played AS gamesPlayed, points1, points2, status FROM series ORDER BY id`).all();}
+export function importStatus(db){
+  const tables=['players','player_accounts','historical_games','historical_matchups','stockfish_analyses','hall_of_fame_records','historical_rating_snapshots','historical_challenges','historical_tournaments','community_xp_events'];
+  return Object.fromEntries(tables.map(table=>[table,db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n]));
+}
