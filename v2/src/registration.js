@@ -8,9 +8,19 @@ export class RegistrationConflictError extends Error {
 }
 
 const normalizeUsername = value => String(value || '').trim().toLowerCase();
-
 const accountHash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
+function exactPlayer(db, platform, usernameNormalized) {
+  const exactAccount = db.prepare(
+    'SELECT player_id FROM player_accounts WHERE platform=? AND username_normalized=?'
+  ).get(platform, usernameNormalized);
+  if (exactAccount) return exactAccount.player_id;
+  return db.prepare(
+    'SELECT id AS player_id FROM players WHERE platform=? AND lower(username)=?'
+  ).get(platform, usernameNormalized)?.player_id || null;
+}
+
+// Kept for recovery/admin workflows. The public web uses submitVerifiedRegistration.
 export function submitRegistration(db, input, {idFactory = randomUUID} = {}) {
   const name = String(input.name || '').trim();
   const platform = input.platform;
@@ -21,13 +31,7 @@ export function submitRegistration(db, input, {idFactory = randomUUID} = {}) {
   }
 
   const requestId = 'REG-' + idFactory().slice(0, 12);
-  const exactAccount = db.prepare(
-    'SELECT player_id FROM player_accounts WHERE platform=? AND username_normalized=?'
-  ).get(platform, usernameNormalized);
-  const exactPrimary = exactAccount || db.prepare(
-    'SELECT id AS player_id FROM players WHERE platform=? AND lower(username)=?'
-  ).get(platform, usernameNormalized);
-  const matchedPlayerId = exactPrimary ? exactPrimary.player_id : null;
+  const matchedPlayerId = exactPlayer(db, platform, usernameNormalized);
   const matchBasis = matchedPlayerId ? 'EXACT_PLATFORM_USERNAME' : 'NEW_PLATFORM_USERNAME';
   const requestStatus = matchedPlayerId ? 'pending_exact_candidate' : 'pending';
 
@@ -54,4 +58,81 @@ export function submitRegistration(db, input, {idFactory = randomUUID} = {}) {
   }
 
   return {id:requestId,status:'pending_review'};
+}
+
+export function submitVerifiedRegistration(
+  db,
+  input,
+  verification,
+  {idFactory = randomUUID} = {},
+) {
+  const name = String(input.name || '').trim();
+  const platform = input.platform;
+  if (!verification?.verified || verification.platform !== platform) {
+    throw new TypeError('verified platform account is required');
+  }
+  const username = String(verification.username || input.username || '').trim();
+  const usernameNormalized = normalizeUsername(verification.usernameNormalized || username);
+  if (!name || !username || !['lichess','chesscom'].includes(platform)) {
+    throw new TypeError('name, platform and username are required');
+  }
+
+  const requestId = 'REG-' + idFactory().slice(0, 12);
+  const matchedPlayerId = exactPlayer(db, platform, usernameNormalized);
+  const existingPlayer = matchedPlayerId
+    ? db.prepare('SELECT registration_status FROM players WHERE id=?').get(matchedPlayerId)
+    : null;
+  const matchedHistory = Boolean(existingPlayer && existingPlayer.registration_status === 'historical_unconfirmed');
+  const matchBasis = matchedPlayerId ? 'EXACT_PLATFORM_USERNAME' : 'NEW_PLATFORM_USERNAME';
+
+  db.transaction(() => {
+    let playerId = matchedPlayerId;
+    if (!playerId) {
+      playerId = 'P-' + idFactory().slice(0, 12);
+      db.prepare(
+        "INSERT INTO players (id,name,platform,username,whatsapp,country,registration_status) VALUES (?,?,?,?,?,?,'registered')"
+      ).run(playerId,name,platform,username,input.whatsapp || null,input.country || null);
+      db.prepare(
+        "INSERT INTO player_accounts (id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?,?,?,?,'verified','web_registration',?,?,?,?,?)"
+      ).run(
+        'ACC-' + idFactory().slice(0, 12),playerId,platform,username,usernameNormalized,requestId,
+        verification.verificationSource,verification.verifiedAt,
+        accountHash({requestId,platform,usernameNormalized,verifiedAt:verification.verifiedAt}),
+      );
+    } else {
+      db.prepare(
+        "UPDATE players SET registration_status='registered', whatsapp=COALESCE(?,whatsapp) WHERE id=?"
+      ).run(input.whatsapp || null,playerId);
+      const updated = db.prepare(`
+        UPDATE player_accounts
+        SET username=?,username_normalized=?,account_status='verified',verification_source=?,verified_at=?
+        WHERE player_id=? AND platform=? AND username_normalized=?
+      `).run(username,usernameNormalized,verification.verificationSource,verification.verifiedAt,playerId,platform,usernameNormalized);
+      if (!updated.changes) {
+        db.prepare(
+          "INSERT INTO player_accounts (id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?,?,?,?,'verified','web_registration',?,?,?,?,?)"
+        ).run(
+          'ACC-' + idFactory().slice(0, 12),playerId,platform,username,usernameNormalized,requestId,
+          verification.verificationSource,verification.verifiedAt,
+          accountHash({requestId,platform,usernameNormalized,verifiedAt:verification.verifiedAt}),
+        );
+      }
+    }
+
+    db.prepare(
+      'INSERT INTO registration_requests (id,name,platform,username,username_normalized,whatsapp,country,matched_player_id,match_basis,status,reviewed_at,reviewed_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).run(
+      requestId,name,platform,username,usernameNormalized,input.whatsapp || null,input.country || null,
+      playerId,matchBasis,'verified',verification.verifiedAt,'platform_api',
+    );
+  })();
+
+  return {
+    id: requestId,
+    status: 'verified',
+    playerId: matchedPlayerId || db.prepare('SELECT matched_player_id FROM registration_requests WHERE id=?').get(requestId).matched_player_id,
+    platform,
+    username,
+    matchedHistory,
+  };
 }
