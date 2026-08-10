@@ -41,9 +41,13 @@ function ratingDelta(db, playerId, cutoff, now) {
   return baseline ? latest.rating - baseline.rating : null;
 }
 
-export function communityMetrics(db, { now = new Date() } = {}) {
-  const players = db.prepare('SELECT id,name FROM players ORDER BY name').all();
-  const games = db.prepare("SELECT * FROM historical_games WHERE identity_status='CONFIRMED_SOURCE_ID' AND white_player_id IS NOT NULL AND black_player_id IS NOT NULL").all();
+const allowedSet = playerIds => Array.isArray(playerIds) ? new Set(playerIds) : null;
+
+export function communityMetrics(db, { now = new Date(), playerIds = null } = {}) {
+  const allowed = allowedSet(playerIds);
+  const players = db.prepare('SELECT id,name FROM players ORDER BY name').all().filter(player => !allowed || allowed.has(player.id));
+  const games = db.prepare("SELECT * FROM historical_games WHERE identity_status='CONFIRMED_SOURCE_ID' AND white_player_id IS NOT NULL AND black_player_id IS NOT NULL").all()
+    .filter(game => !allowed || (allowed.has(game.white_player_id) && allowed.has(game.black_player_id)));
   const cutoff7 = new Date(now.getTime() - 7 * DAY_MS);
   const cutoff30 = new Date(now.getTime() - 30 * DAY_MS);
   return players.map(player => {
@@ -82,30 +86,41 @@ export function h2hMetrics(db, playerA, playerB) {
   return { playerA, playerB, total: games.length, wins: outcomes.filter(x => x === 'W').length, draws: outcomes.filter(x => x === 'D').length, losses: outcomes.filter(x => x === 'L').length, games: games.map(({id,source_game_id,platform,url,played_at,result})=>({id,sourceGameId:source_game_id,platform,url,playedAt:played_at,result})) };
 }
 
-export function xpLeaderboard(db) {
-  return db.prepare(`SELECT p.id AS playerId,p.name,COALESCE(SUM(e.awarded_xp),0) AS communityXp,COUNT(e.id) AS xpEvents FROM players p LEFT JOIN community_xp_events e ON e.player_id=p.id AND e.verified=1 GROUP BY p.id,p.name ORDER BY communityXp DESC,p.name`).all();
+export function xpLeaderboard(db, {playerIds = null} = {}) {
+  const allowed = allowedSet(playerIds);
+  return db.prepare(`SELECT p.id AS playerId,p.name,COALESCE(SUM(e.awarded_xp),0) AS communityXp,COUNT(e.id) AS xpEvents FROM players p LEFT JOIN community_xp_events e ON e.player_id=p.id AND e.verified=1 GROUP BY p.id,p.name ORDER BY communityXp DESC,p.name`).all()
+    .filter(row => !allowed || allowed.has(row.playerId));
 }
 
-export function communityHighlights(db, {now = new Date()} = {}) {
-  const metrics = communityMetrics(db,{now});
+export function communityHighlights(db, {now = new Date(), playerIds = null} = {}) {
+  const allowed = allowedSet(playerIds);
+  const metrics = communityMetrics(db,{now,playerIds});
   const active = metrics.filter(row => row.games7d > 0).sort((a,b) => b.games7d-a.games7d || a.name.localeCompare(b.name))[0] || null;
   const rating = metrics.filter(row => Number.isFinite(row.ratingDelta30d)).sort((a,b) => b.ratingDelta30d-a.ratingDelta30d || a.name.localeCompare(b.name))[0] || null;
   const opponents = metrics.filter(row => row.distinctOpponents > 0).sort((a,b) => b.distinctOpponents-a.distinctOpponents || a.name.localeCompare(b.name))[0] || null;
-  const pair = db.prepare(
-    "SELECT CASE WHEN white_player_id<black_player_id THEN white_player_id ELSE black_player_id END AS a, CASE WHEN white_player_id<black_player_id THEN black_player_id ELSE white_player_id END AS b, COUNT(*) AS total FROM historical_games WHERE identity_status='CONFIRMED_SOURCE_ID' AND white_player_id IS NOT NULL AND black_player_id IS NOT NULL GROUP BY a,b ORDER BY total DESC,a,b LIMIT 1"
-  ).get();
-  let rivalry = null;
-  if (pair) {
-    const names = db.prepare('SELECT id,name FROM players WHERE id IN (?,?)').all(pair.a,pair.b);
-    const byId = new Map(names.map(row => [row.id,row.name]));
-    rivalry = Object.assign({nameA:byId.get(pair.a),nameB:byId.get(pair.b)},h2hMetrics(db,pair.a,pair.b));
+  const games = db.prepare("SELECT white_player_id,black_player_id FROM historical_games WHERE identity_status='CONFIRMED_SOURCE_ID' AND white_player_id IS NOT NULL AND black_player_id IS NOT NULL").all()
+    .filter(game => !allowed || (allowed.has(game.white_player_id) && allowed.has(game.black_player_id)));
+  const pairs = new Map();
+  for (const game of games) {
+    const [a,b] = [game.white_player_id,game.black_player_id].sort();
+    const key = `${a}|${b}`;
+    pairs.set(key,(pairs.get(key)||0)+1);
   }
-  const hall = db.prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END) AS linked FROM hall_of_fame_records').get();
+  const topPair = [...pairs.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))[0] || null;
+  let rivalry = null;
+  if (topPair) {
+    const [a,b] = topPair[0].split('|');
+    const names = db.prepare('SELECT id,name FROM players WHERE id IN (?,?)').all(a,b);
+    const byId = new Map(names.map(row => [row.id,row.name]));
+    rivalry = Object.assign({nameA:byId.get(a),nameB:byId.get(b)},h2hMetrics(db,a,b));
+  }
+  const hallRows = db.prepare('SELECT player_id FROM hall_of_fame_records WHERE player_id IS NOT NULL').all()
+    .filter(row => !allowed || allowed.has(row.player_id));
   return {
     mostActive7d: active,
     featuredRivalry: rivalry,
     largestRatingChange30d: rating,
     mostDistinctOpponents: opponents,
-    hallOfFame: {records:hall.total || 0,linked:hall.linked || 0}
+    hallOfFame: {records:hallRows.length,linked:hallRows.length}
   };
 }
