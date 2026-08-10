@@ -310,3 +310,23 @@ CREATE INDEX IF NOT EXISTS idx_historical_games_played_at ON historical_games(pl
 CREATE INDEX IF NOT EXISTS idx_historical_games_players ON historical_games(white_player_id,black_player_id);
 CREATE INDEX IF NOT EXISTS idx_historical_ratings_player_time ON historical_rating_snapshots(player_id,captured_at);
 CREATE INDEX IF NOT EXISTS idx_community_xp_player_time ON community_xp_events(player_id,occurred_at);
+
+CREATE TABLE IF NOT EXISTS registration_requests (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  platform TEXT NOT NULL CHECK(platform IN ('lichess','chesscom')),
+  username TEXT NOT NULL,
+  username_normalized TEXT NOT NULL,
+  whatsapp TEXT,
+  country TEXT,
+  matched_player_id TEXT REFERENCES players(id),
+  match_basis TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at TEXT,
+  reviewed_by TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_pending_username
+ON registration_requests(platform,username_normalized)
+WHERE status IN ('pending','pending_exact_candidate');

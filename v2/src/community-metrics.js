@@ -85,3 +85,27 @@ export function h2hMetrics(db, playerA, playerB) {
 export function xpLeaderboard(db) {
   return db.prepare(`SELECT p.id AS playerId,p.name,COALESCE(SUM(e.awarded_xp),0) AS communityXp,COUNT(e.id) AS xpEvents FROM players p LEFT JOIN community_xp_events e ON e.player_id=p.id AND e.verified=1 GROUP BY p.id,p.name ORDER BY communityXp DESC,p.name`).all();
 }
+
+export function communityHighlights(db, {now = new Date()} = {}) {
+  const metrics = communityMetrics(db,{now});
+  const active = metrics.filter(row => row.games7d > 0).sort((a,b) => b.games7d-a.games7d || a.name.localeCompare(b.name))[0] || null;
+  const rating = metrics.filter(row => Number.isFinite(row.ratingDelta30d)).sort((a,b) => b.ratingDelta30d-a.ratingDelta30d || a.name.localeCompare(b.name))[0] || null;
+  const opponents = metrics.filter(row => row.distinctOpponents > 0).sort((a,b) => b.distinctOpponents-a.distinctOpponents || a.name.localeCompare(b.name))[0] || null;
+  const pair = db.prepare(
+    "SELECT CASE WHEN white_player_id<black_player_id THEN white_player_id ELSE black_player_id END AS a, CASE WHEN white_player_id<black_player_id THEN black_player_id ELSE white_player_id END AS b, COUNT(*) AS total FROM historical_games WHERE identity_status='CONFIRMED_SOURCE_ID' AND white_player_id IS NOT NULL AND black_player_id IS NOT NULL GROUP BY a,b ORDER BY total DESC,a,b LIMIT 1"
+  ).get();
+  let rivalry = null;
+  if (pair) {
+    const names = db.prepare('SELECT id,name FROM players WHERE id IN (?,?)').all(pair.a,pair.b);
+    const byId = new Map(names.map(row => [row.id,row.name]));
+    rivalry = Object.assign({nameA:byId.get(pair.a),nameB:byId.get(pair.b)},h2hMetrics(db,pair.a,pair.b));
+  }
+  const hall = db.prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END) AS linked FROM hall_of_fame_records').get();
+  return {
+    mostActive7d: active,
+    featuredRivalry: rivalry,
+    largestRatingChange30d: rating,
+    mostDistinctOpponents: opponents,
+    hallOfFame: {records:hall.total || 0,linked:hall.linked || 0}
+  };
+}
