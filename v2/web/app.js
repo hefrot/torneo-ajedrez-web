@@ -8,35 +8,41 @@ async function api(path){
   if(!response.ok)throw new Error(data?.error||('HTTP '+response.status));
   return data;
 }
-const platformName=value=>value==='chesscom'?'Chess.com':value==='lichess'?'Lichess':'Sin plataforma';
+const platformName=value=>value==='chesscom'?'Chess.com':value==='lichess'?'Lichess':'Cuenta verificada';
 
 function renderStandings(rows){
   const element=one('#standings');
-  if(!rows.length){element.innerHTML='<div class="empty">La liga oficial aún no inicia. El histórico y Community XP no suman puntos oficiales.</div>';return;}
+  if(!rows.length){element.innerHTML='<div class="empty">La liga comenzará cuando cierre el registro. Aquí aparecerán automáticamente los puntos oficiales.</div>';return;}
   element.innerHTML=rows.map(row=>'<article class="rank-row"><div class="rank-number">'+row.rank+'</div><div><div class="row-title">'+esc(row.name)+'</div><div class="row-meta"><span>'+row.played+' PJ</span><span>'+row.wins+' G</span><span>'+row.draws+' E</span><span>'+row.losses+' P</span></div></div><div class="points"><strong>'+row.points+'</strong><span>puntos liga</span></div></article>').join('');
 }
 function renderPlayers(rows){
   const element=one('#players');
-  if(!rows.length){element.innerHTML='<div class="empty">Aún no hay identidades recuperadas.</div>';return;}
-  element.innerHTML=rows.map(player=>'<article class="player-row"><div><div class="row-title">'+esc(player.name)+'</div><div class="row-meta"><span>@'+esc(player.username||'pendiente')+'</span><span>'+(player.registration_status==='historical_unconfirmed'?'Histórico · debe registrarse':esc(player.registration_status||'pending'))+'</span></div></div><span class="platform-badge">'+platformName(player.platform)+'</span></article>').join('');
+  if(!rows.length){element.innerHTML='<div class="empty">Todavía no hay jugadores confirmados. Sé de los primeros en registrarte.</div>';return;}
+  element.innerHTML=rows.map(player=>'<article class="player-row"><div><div class="row-title">'+esc(player.name)+'</div><div class="row-meta"><span>@'+esc(player.username||'')+'</span><span>✓ Cuenta verificada</span></div></div><span class="platform-badge status-ok">'+platformName(player.platform)+'</span></article>').join('');
 }
 function renderActivity(rows){
   const element=one('#activity');
   const ranked=rows.slice().sort((a,b)=>b.games30d-a.games30d||b.gamesAllTime-a.gamesAllTime||a.name.localeCompare(b.name));
-  if(!ranked.length){element.innerHTML='<div class="empty">SIN DATA de actividad verificada.</div>';return;}
-  element.innerHTML=ranked.slice(0,20).map(player=>'<article class="activity-row"><div><div class="row-title">'+esc(player.name)+'</div><div class="row-meta"><span>'+player.games7d+' partidas 7d</span><span>'+player.games30d+' partidas 30d</span><span>'+player.distinctOpponents+' rivales</span></div></div><span class="status-badge '+(player.games7d?'status-ok':'')+'">'+(player.games7d?'Activo':'Histórico')+'</span></article>').join('');
+  if(!ranked.length){element.innerHTML='<div class="empty">La actividad aparecerá cuando los jugadores confirmados empiecen a jugar.</div>';return;}
+  element.innerHTML=ranked.slice(0,20).map(player=>'<article class="activity-row"><div><div class="row-title">'+esc(player.name)+'</div><div class="row-meta"><span>'+player.games7d+' partidas 7d</span><span>'+player.games30d+' partidas 30d</span><span>'+player.distinctOpponents+' rivales</span></div></div><span class="status-badge '+(player.games7d?'status-ok':'')+'">'+(player.games7d?'Activo':'Confirmado')+'</span></article>').join('');
 }
 function setText(selector,value){const element=one(selector);if(element)element.textContent=value;}
+function showHighlight(cardId,titleId,detailId,title,detail){
+  const card=one(cardId);if(!card)return 0;
+  card.hidden=false;setText(titleId,title);setText(detailId,detail);return 1;
+}
 function renderHighlights(data){
-  const active=data.mostActive7d;
-  if(active){setText('#highlight-active',active.name);setText('#highlight-active-detail',active.games7d+' partidas verificadas.');}
-  const rivalry=data.featuredRivalry;
-  if(rivalry){setText('#highlight-rivalry',rivalry.nameA+' vs '+rivalry.nameB);setText('#highlight-rivalry-detail',rivalry.wins+'-'+rivalry.draws+'-'+rivalry.losses+' en '+rivalry.total+' partidas.');}
-  const rating=data.largestRatingChange30d;
-  if(rating){setText('#highlight-rating',rating.name);setText('#highlight-rating-detail',(rating.ratingDelta30d>=0?'+':'')+rating.ratingDelta30d+' en 30 días.');}
-  const opponents=data.mostDistinctOpponents;
-  if(opponents){setText('#highlight-opponents',opponents.name);setText('#highlight-opponents-detail',opponents.distinctOpponents+' rivales verificados.');}
-  if(data.hallOfFame?.records){setText('#highlight-hall',data.hallOfFame.records+' registros');setText('#highlight-hall-detail',data.hallOfFame.linked+' vinculados por ID estable; el resto sigue en REVIEW.');}
+  let visible=0;
+  const active=data?.mostActive7d;
+  if(active)visible+=showHighlight('#card-active','#highlight-active','#highlight-active-detail',active.name,active.games7d+' partidas verificadas.');
+  const rivalry=data?.featuredRivalry;
+  if(rivalry)visible+=showHighlight('#card-rivalry','#highlight-rivalry','#highlight-rivalry-detail',rivalry.nameA+' vs '+rivalry.nameB,rivalry.wins+'-'+rivalry.draws+'-'+rivalry.losses+' en '+rivalry.total+' partidas.');
+  const rating=data?.largestRatingChange30d;
+  if(rating)visible+=showHighlight('#card-rating','#highlight-rating','#highlight-rating-detail',rating.name,(rating.ratingDelta30d>=0?'+':'')+rating.ratingDelta30d+' en 30 días.');
+  const opponents=data?.mostDistinctOpponents;
+  if(opponents)visible+=showHighlight('#card-opponents','#highlight-opponents','#highlight-opponents-detail',opponents.name,opponents.distinctOpponents+' rivales distintos.');
+  if((data?.hallOfFame?.records||0)>0)visible+=showHighlight('#card-hall','#highlight-hall','#highlight-hall-detail',data.hallOfFame.records+' logros vinculados','Historial confirmado de jugadores registrados.');
+  const section=one('#highlights-section');if(section)section.hidden=visible===0;
 }
 function setupTabs(){
   all('.tab').forEach(button=>button.addEventListener('click',()=>{
@@ -57,7 +63,7 @@ async function load(){
   renderActivity(metrics);
   if(highlights)renderHighlights(highlights);
   setText('#stat-players',players.length);
-  setText('#stat-games',metrics.reduce((sum,row)=>sum+row.gamesAllTime,0)/2);
+  setText('#stat-games',Math.round(metrics.reduce((sum,row)=>sum+row.gamesAllTime,0)/2));
   setText('#stat-active',metrics.filter(row=>row.games7d>0).length);
   setText('#stat-hall',highlights?.hallOfFame?.records||0);
 }
