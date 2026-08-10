@@ -1,0 +1,18 @@
+[Unit]
+Description=HMENA Chess League V2 API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/hmena-chess/v2
+EnvironmentFile=/etc/hmena-chess.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

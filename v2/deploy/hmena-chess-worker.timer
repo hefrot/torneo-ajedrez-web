@@ -1,0 +1,11 @@
+[Unit]
+Description=Run HMENA Chess League worker hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+Unit=hmena-chess-worker.service
+
+[Install]
+WantedBy=timers.target
