@@ -5,9 +5,11 @@ import {openDatabase,listPlayers,loadGames,loadSeries,importStatus} from './db.j
 import {generateSeries,generateGameSlots,computeStandings,eligibleOpponents,seasonPlan,activityStatus} from './league-engine.js';
 import {sendGroupMessage} from './services/whatsapp.js';
 import {communityMetrics,h2hMetrics,xpLeaderboard,communityHighlights} from './community-metrics.js';
-import {submitVerifiedRegistration} from './registration.js';
+import {submitVerifiedRegistration,linkVerifiedAccount,RegistrationConflictError} from './registration.js';
 import {verifyPlatformAccount,AccountNotFoundError,AccountVerificationUnavailableError} from './account-verification.js';
 import {listPublicPlayers,publicPlayerIds,isPublicPlayer} from './public-visibility.js';
+import {buildSeasonReadiness,seasonPairKey} from './season-readiness.js';
+import {getSeasonControl,registrationIsOpen,openRegistration,closeRegistration,markSeasonStarted} from './season-control.js';
 
 const app=express();
 const db=openDatabase();
@@ -21,14 +23,19 @@ const adminOnly=(req,res,next)=>{
   if(!process.env.ADMIN_API_KEY||req.get('x-admin-key')!==process.env.ADMIN_API_KEY)return res.status(401).json({error:'admin key required'});
   next();
 };
+const readiness=()=>buildSeasonReadiness(listPublicPlayers(db));
 
 app.get('/api/health',(_q,res)=>res.json({ok:true,service:'hmena-chess-v2'}));
-app.get('/api/config',(_q,res)=>res.json({seasonName:process.env.SEASON_NAME||'HMENA Chess League 2026',gamesPerOpponent:3,scoring:{win:3,draw:1,loss:0},minActivityHours:24,playAhead:true,automatic24hForfeit:false,registrationRequiresVerifiedPlatformAccount:true}));
+app.get('/api/config',(_q,res)=>{
+  const control=getSeasonControl(db);
+  res.json({seasonName:process.env.SEASON_NAME||'HMENA Chess League 2026',gamesPerOpponent:3,scoring:{win:3,draw:1,loss:0},minActivityHours:24,playAhead:true,automatic24hForfeit:false,registrationRequiresVerifiedPlatformAccount:true,registrationOpen:control.registration_state==='OPEN',registrationState:control.registration_state,seasonStatus:control.season_status});
+});
 app.post('/api/season/preview',(req,res)=>{
   try{const count=Number(req.body?.playerCount);const days=Number(req.body?.maxDays||count);res.json(seasonPlan(count,3,days));}
   catch(error){res.status(400).json({error:error.message});}
 });
 app.post('/api/registration',async(req,res,next)=>{
+  if(!registrationIsOpen(db))return res.status(409).json({error:'Las inscripciones están cerradas para esta temporada',code:'REGISTRATION_CLOSED'});
   const platform=cleanPlatform(req.body?.platform);
   const username=String(req.body?.username||'').trim();
   try{
@@ -39,6 +46,7 @@ app.post('/api/registration',async(req,res,next)=>{
   }catch(error){
     if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});
     if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});
+    if(error instanceof RegistrationConflictError)return res.status(409).json({error:error.message,code:error.code});
     if(error instanceof TypeError)return res.status(400).json({error:error.message});
     next(error);
   }
@@ -52,16 +60,50 @@ app.patch('/api/admin/players/:id',adminOnly,(req,res)=>{
   if(!result.changes)return res.status(404).json({error:'player not found'});
   res.json({ok:true});
 });
+app.post('/api/admin/players/:id/accounts/verify',adminOnly,async(req,res,next)=>{
+  if(getSeasonControl(db).season_status==='STARTED')return res.status(409).json({error:'season already started'});
+  const platform=cleanPlatform(req.body?.platform);
+  const username=String(req.body?.username||'').trim();
+  try{
+    if(!platform||!username)return res.status(400).json({error:'platform and username are required'});
+    const verification=await verifyPlatformAccount(platform,username);
+    res.status(201).json(linkVerifiedAccount(db,req.params.id,verification));
+  }catch(error){
+    if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});
+    if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});
+    if(error instanceof RegistrationConflictError)return res.status(409).json({error:error.message,code:error.code});
+    if(error instanceof TypeError)return res.status(400).json({error:error.message});
+    next(error);
+  }
+});
+app.get('/api/admin/season/readiness',adminOnly,(_q,res)=>res.json(Object.assign({control:getSeasonControl(db)},readiness())));
+app.post('/api/admin/registration/open',adminOnly,(_q,res)=>{
+  try{res.json({ok:true,control:openRegistration(db)});}catch(error){res.status(409).json({error:error.message});}
+});
+app.post('/api/admin/registration/close',adminOnly,(_q,res)=>{
+  const state=readiness();
+  if(!state.ready)return res.status(409).json({error:state.playerCount<2?'Se necesitan al menos 2 jugadores verificados':'Hay parejas sin una plataforma en común',readiness:state});
+  res.json({ok:true,control:closeRegistration(db),readiness:state});
+});
 app.post('/api/admin/season/start',adminOnly,(req,res)=>{
-  const players=listPublicPlayers(db).map(p=>({id:p.id,name:p.name}));
-  if(players.length<2)return res.status(400).json({error:'At least 2 verified registered players are required'});
+  const control=getSeasonControl(db);
+  if(control.season_status!=='REGISTRATION'||control.registration_state!=='CLOSED')return res.status(409).json({error:'Close and freeze registration before starting the season'});
+  const players=listPublicPlayers(db);
+  const state=buildSeasonReadiness(players);
+  if(!state.ready)return res.status(409).json({error:'Season readiness failed',readiness:state});
   if(db.prepare('SELECT COUNT(*) AS n FROM series').get().n>0)return res.status(409).json({error:'Season already generated'});
-  const series=generateSeries(players,3);
+  const series=generateSeries(players.map(p=>({id:p.id,name:p.name})),3);
   const games=generateGameSlots(series);
+  const compatibility=new Map(state.pairs.map(pair=>[pair.key,pair.allowedPlatforms]));
   const insertSeries=db.prepare('INSERT INTO series (id,player1_id,player2_id,games_required,games_played,points1,points2,status) VALUES (@id,@player1Id,@player2Id,@gamesRequired,@gamesPlayed,@points1,@points2,@status)');
   const insertGame=db.prepare('INSERT INTO games (id,series_id,player1_id,player2_id,game_no,status) VALUES (@id,@seriesId,@player1Id,@player2Id,@gameNo,@status)');
-  db.transaction(()=>{for(const row of series)insertSeries.run(row);for(const row of games)insertGame.run(row);})();
-  res.status(201).json(Object.assign({},seasonPlan(players.length,3,Number(process.env.SEASON_MAX_DAYS||players.length)),{generated:true}));
+  const insertPlatforms=db.prepare('INSERT INTO series_platforms (series_id,allowed_platforms_json) VALUES (?,?)');
+  db.transaction(()=>{
+    for(const row of series){insertSeries.run(row);insertPlatforms.run(row.id,JSON.stringify(compatibility.get(seasonPairKey(row.player1Id,row.player2Id))||[]));}
+    for(const row of games)insertGame.run(row);
+    markSeasonStarted(db);
+  })();
+  res.status(201).json(Object.assign({},seasonPlan(players.length,3,Number(process.env.SEASON_MAX_DAYS||players.length)),{generated:true,control:getSeasonControl(db)}));
 });
 app.get('/api/standings',(_q,res)=>{
   const players=listPublicPlayers(db).map(p=>({id:p.id,name:p.name}));
@@ -70,7 +112,10 @@ app.get('/api/standings',(_q,res)=>{
 app.get('/api/player/:id/opponents',(req,res)=>{
   const players=new Map(listPublicPlayers(db).map(p=>[p.id,p]));
   if(!players.has(req.params.id))return res.status(404).json({error:'player not found'});
-  res.json(eligibleOpponents(req.params.id,loadSeries(db)).filter(o=>players.has(o.opponentId)).map(o=>Object.assign({},o,{opponent:players.get(o.opponentId)?.name,opponentPlatform:players.get(o.opponentId)?.platform,opponentUsername:players.get(o.opponentId)?.username})));
+  res.json(eligibleOpponents(req.params.id,loadSeries(db)).filter(o=>players.has(o.opponentId)).map(o=>{
+    const row=db.prepare('SELECT allowed_platforms_json FROM series_platforms WHERE series_id=?').get(o.seriesId);
+    return Object.assign({},o,{opponent:players.get(o.opponentId)?.name,opponentPlatform:players.get(o.opponentId)?.platform,opponentUsername:players.get(o.opponentId)?.username,allowedPlatforms:row?JSON.parse(row.allowed_platforms_json):[]});
+  }));
 });
 app.patch('/api/player/:id/availability',(req,res)=>{
   if(!isPublicPlayer(db,req.params.id))return res.status(404).json({error:'player not found'});
@@ -86,9 +131,13 @@ app.post('/api/games/report',(req,res)=>{
   if(!isPublicPlayer(db,playerId))return res.status(400).json({error:'verified player required'});
   const series=db.prepare('SELECT * FROM series WHERE id=?').get(seriesId);
   if(!series||![series.player1_id,series.player2_id].includes(playerId))return res.status(400).json({error:'invalid player/series'});
+  const allowedRow=db.prepare('SELECT allowed_platforms_json FROM series_platforms WHERE series_id=?').get(seriesId);
+  const normalizedPlatform=cleanPlatform(platform)||platform;
+  const allowedPlatforms=allowedRow?JSON.parse(allowedRow.allowed_platforms_json):[];
+  if(allowedPlatforms.length&&!allowedPlatforms.includes(normalizedPlatform))return res.status(400).json({error:'platform not allowed for this pairing'});
   const slot=db.prepare("SELECT * FROM games WHERE series_id=? AND status='PENDING' ORDER BY game_no LIMIT 1").get(seriesId);
   if(!slot)return res.status(409).json({error:'series has no pending game slots'});
-  db.prepare("UPDATE games SET platform=?, external_game_id=?, url=?, status='REPORTED' WHERE id=?").run(cleanPlatform(platform)||platform,externalGameId||null,url||null,slot.id);
+  db.prepare("UPDATE games SET platform=?, external_game_id=?, url=?, status='REPORTED' WHERE id=?").run(normalizedPlatform,externalGameId||null,url||null,slot.id);
   res.status(202).json({gameId:slot.id,status:'REPORTED',note:'Worker/API validation must confirm the result before points count.'});
 });
 app.get('/api/activity',(_q,res)=>{
