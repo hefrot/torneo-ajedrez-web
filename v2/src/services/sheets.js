@@ -1,0 +1,5 @@
+import {google} from 'googleapis';
+function credentialsFromEnv(){const raw=process.env.GOOGLE_SERVICE_ACCOUNT_JSON;return raw?JSON.parse(raw):null;}
+export async function sheetsClient(){const credentials=credentialsFromEnv();if(!credentials)return null;const auth=new google.auth.GoogleAuth({credentials,scopes:['https://www.googleapis.com/auth/spreadsheets']});return google.sheets({version:'v4',auth});}
+export async function appendRows(range,rows,spreadsheetId=process.env.GOOGLE_SHEETS_ID){if(!spreadsheetId||!rows.length)return{skipped:true};const sheets=await sheetsClient();if(!sheets)return{skipped:true,reason:'Google service account not configured'};return sheets.spreadsheets.values.append({spreadsheetId,range,valueInputOption:'USER_ENTERED',insertDataOption:'INSERT_ROWS',requestBody:{values:rows}});}
+export async function updateRange(range,values,spreadsheetId=process.env.GOOGLE_SHEETS_ID){if(!spreadsheetId)return{skipped:true};const sheets=await sheetsClient();if(!sheets)return{skipped:true,reason:'Google service account not configured'};return sheets.spreadsheets.values.update({spreadsheetId,range,valueInputOption:'USER_ENTERED',requestBody:{values}});}

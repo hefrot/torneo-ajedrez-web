@@ -1,0 +1,12 @@
+[Unit]
+Description=HMENA Chess League V2 worker run
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+WorkingDirectory=/opt/hmena-chess/v2
+EnvironmentFile=/etc/hmena-chess.env
+ExecStart=/usr/bin/node src/worker.js
+NoNewPrivileges=true
+PrivateTmp=true
