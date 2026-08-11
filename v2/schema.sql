@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS series (
   UNIQUE(player1_id, player2_id)
 );
 
+CREATE TABLE IF NOT EXISTS series_platforms (
+  series_id TEXT PRIMARY KEY REFERENCES series(id) ON DELETE CASCADE,
+  allowed_platforms_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS games (
   id TEXT PRIMARY KEY,
   series_id TEXT NOT NULL REFERENCES series(id),
@@ -91,8 +96,6 @@ CREATE TABLE IF NOT EXISTS community_challenges (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- A player can own accounts on both platforms. The legacy columns in players
--- remain as the primary account for backwards-compatible API responses.
 CREATE TABLE IF NOT EXISTS player_accounts (
   id TEXT PRIMARY KEY,
   player_id TEXT NOT NULL REFERENCES players(id),
@@ -137,7 +140,6 @@ CREATE TABLE IF NOT EXISTS source_provenance (
   UNIQUE(entity_type, source_system, source_table, source_id)
 );
 
--- Historical records never enter current League Points automatically.
 CREATE TABLE IF NOT EXISTS historical_games (
   id TEXT PRIMARY KEY,
   source_system TEXT NOT NULL,
@@ -330,3 +332,17 @@ CREATE TABLE IF NOT EXISTS registration_requests (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_pending_username
 ON registration_requests(platform,username_normalized)
 WHERE status IN ('pending','pending_exact_candidate');
+
+CREATE TABLE IF NOT EXISTS season_control (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  registration_state TEXT NOT NULL DEFAULT 'OPEN' CHECK(registration_state IN ('OPEN','CLOSED')),
+  season_status TEXT NOT NULL DEFAULT 'REGISTRATION' CHECK(season_status IN ('REGISTRATION','STARTED','COMPLETED')),
+  registration_opened_at TEXT,
+  registration_closed_at TEXT,
+  roster_frozen_at TEXT,
+  started_at TEXT,
+  completed_at TEXT
+);
+
+INSERT OR IGNORE INTO season_control (id,registration_state,season_status,registration_opened_at)
+VALUES (1,'OPEN','REGISTRATION',CURRENT_TIMESTAMP);
