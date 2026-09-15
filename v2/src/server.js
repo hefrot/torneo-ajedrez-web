@@ -19,6 +19,7 @@ import {reportOfficialGame,recordChallenge,validateReportedGame,disputeSubmissio
 import {GameValidationError} from './game-validation.js';
 import {LichessClient} from './providers/lichess.js';
 import {ChessComClient} from './providers/chesscom.js';
+import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent} from './academic.js';
 
 const app=express();
 const db=openDatabase();
@@ -89,6 +90,13 @@ app.post('/api/admin/players/:id/accounts/verify',adminOnly,async(req,res,next)=
     next(error);
   }
 });
+app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
+app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
+app.get('/api/admin/schools',adminOnly,(_q,res)=>res.json(listSchools(db)));
+app.post('/api/admin/schools',adminOnly,(req,res)=>{try{res.status(201).json(createSchool(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
+app.get('/api/admin/programs',adminOnly,(_q,res)=>res.json(listPrograms(db)));
+app.post('/api/admin/programs',adminOnly,(req,res)=>{try{res.status(201).json(createProgram(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/admin/programs/:id/enrollments',adminOnly,(req,res)=>{try{res.status(201).json(enrollStudent(db,{programId:req.params.id,studentId:req.body?.studentId,initialLevel:req.body?.initialLevel??null}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/season/readiness',adminOnly,(_q,res)=>res.json(Object.assign({control:getSeasonControl(db),compatibility:readiness()},buildReadinessDashboard(db))));
 app.get('/api/admin/rules',adminOnly,(_q,res)=>res.json(listLeagueRules(db)));
 app.put('/api/admin/rules/:key',adminOnly,(req,res)=>{try{res.json(updateLeagueRule(db,req.params.key,req.body?.value,{approved:req.body?.approved===true}));}catch(error){res.status(400).json({error:error.message});}});

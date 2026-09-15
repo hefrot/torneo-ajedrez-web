@@ -7,7 +7,9 @@ export function openDatabase(path = process.env.DATABASE_PATH || './data/league.
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path);
   const schemaPath = fileURLToPath(new URL('../schema.sql', import.meta.url));
+  const academicSchemaPath = fileURLToPath(new URL('../academic-schema.sql', import.meta.url));
   db.exec(readFileSync(schemaPath, 'utf8'));
+  db.exec(readFileSync(academicSchemaPath, 'utf8'));
   return db;
 }
 export function listPlayers(db,{registeredOnly=false}={}){const where=registeredOnly?" WHERE registration_status='registered'":'';return db.prepare(`SELECT * FROM players${where} ORDER BY name`).all();}
