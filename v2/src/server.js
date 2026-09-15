@@ -19,7 +19,7 @@ import {reportOfficialGame,recordChallenge,validateReportedGame,disputeSubmissio
 import {GameValidationError} from './game-validation.js';
 import {LichessClient} from './providers/lichess.js';
 import {ChessComClient} from './providers/chesscom.js';
-import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent} from './academic.js';
+import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent,saveSessionAttendance,studentProfile,addCoachNote} from './academic.js';
 import {coachDashboard} from './coach-dashboard.js';
 
 const app=express();
@@ -99,6 +99,9 @@ app.post('/api/admin/schools',adminOnly,(req,res)=>{try{res.status(201).json(cre
 app.get('/api/admin/programs',adminOnly,(_q,res)=>res.json(listPrograms(db)));
 app.post('/api/admin/programs',adminOnly,(req,res)=>{try{res.status(201).json(createProgram(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/programs/:id/enrollments',adminOnly,(req,res)=>{try{res.status(201).json(enrollStudent(db,{programId:req.params.id,studentId:req.body?.studentId,initialLevel:req.body?.initialLevel??null}));}catch(error){res.status(400).json({error:error.message});}});
+app.put('/api/admin/sessions/:id/attendance',adminOnly,(req,res)=>{try{res.json(saveSessionAttendance(db,req.params.id,req.body?.records));}catch(error){res.status(400).json({error:error.message});}});
+app.get('/api/admin/students/:id/profile',adminOnly,(req,res)=>{const profile=studentProfile(db,req.params.id);if(!profile)return res.status(404).json({error:'student not found'});res.json(profile);});
+app.post('/api/admin/students/:id/notes',adminOnly,(req,res)=>{try{res.status(201).json(addCoachNote(db,req.params.id,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/season/readiness',adminOnly,(_q,res)=>res.json(Object.assign({control:getSeasonControl(db),compatibility:readiness()},buildReadinessDashboard(db))));
 app.get('/api/admin/rules',adminOnly,(_q,res)=>res.json(listLeagueRules(db)));
 app.put('/api/admin/rules/:key',adminOnly,(req,res)=>{try{res.json(updateLeagueRule(db,req.params.key,req.body?.value,{approved:req.body?.approved===true}));}catch(error){res.status(400).json({error:error.message});}});

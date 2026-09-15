@@ -20,12 +20,25 @@
     </header>
     <section id="dashboard" hidden>
       <div class="stat-grid" id="summary"></div>
-      <section class="section"><div class="section-head"><div><h2>Clases de hoy</h2><p>Qué toca, quién viene y qué necesita acción.</p></div></div><div id="sessions" class="coach-stack"></div></section>
-      <section class="section"><div class="section-head"><div><h2>Alertas pedagógicas</h2><p>Prioridades que conviene revisar antes de la siguiente clase.</p></div></div><div id="alerts" class="coach-stack"></div></section>
+      <section class="section"><div class="section-head"><div><h2>Clases de hoy</h2><p>Asistencia, comprensión y plan de clase desde el teléfono.</p></div></div><div id="sessions" class="coach-stack"></div></section>
+      <section class="section"><div class="section-head"><div><h2>Alertas pedagógicas</h2><p>Prioridades para la siguiente clase.</p></div></div><div id="alerts" class="coach-stack"></div></section>
       <section class="section"><div class="section-head"><div><h2>Programas activos</h2><p>Escuelas, privados y grupos en una sola vista.</p></div></div><div id="programs" class="coach-stack"></div></section>
-    </section>
-    <p id="error" class="form-message"></p>
+    </section>    <p id="error" class="form-message"></p>
   </div>
+  <dialog id="student-dialog" class="student-dialog">
+    <form method="dialog" class="dialog-head"><strong id="student-title">Alumno</strong><button class="btn btn-secondary">Cerrar</button></form>
+    <div id="student-profile" class="student-profile"></div>
+    <form id="note-form" class="note-form">
+      <h3>Nueva nota</h3>
+      <select name="visibility" class="field">
+        <option value="coach_only">Solo coach</option>
+        <option value="guardian_visible">Visible para tutor</option>
+        <option value="school_visible">Visible para escuela</option>
+      </select>
+      <textarea name="note" class="field" rows="3" placeholder="Observación pedagógica o administrativa" required></textarea>
+      <button class="btn btn-primary" type="submit">Guardar nota</button>
+    </form>
+  </dialog>
   <script type="module" src="app.js"></script>
 </body>
 </html>

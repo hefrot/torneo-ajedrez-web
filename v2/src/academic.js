@@ -47,3 +47,50 @@ export function enrollStudent(db,{programId,studentId,initialLevel=null}={}){
   db.prepare('INSERT INTO enrollments(id,program_id,student_id,initial_level,current_level) VALUES (@id,@programId,@studentId,@initialLevel,@currentLevel)').run(enrollment);
   return enrollment;
 }
+
+const attendanceStatuses=new Set(['present','absent','late','excused']);
+const engagementFlags=new Set(['focused','distracted','disruptive']);
+
+export function saveSessionAttendance(db,sessionId,records=[]){
+  const session=db.prepare('SELECT id,program_id FROM class_sessions WHERE id=?').get(sessionId);
+  if(!session)throw new TypeError('session not found');
+  if(!Array.isArray(records))throw new TypeError('records must be an array');
+  const enrolled=db.prepare('SELECT 1 FROM enrollments WHERE program_id=? AND student_id=?');
+  const upsert=db.prepare(`INSERT INTO attendance(session_id,student_id,status,comprehension_score,engagement_flag,note)
+    VALUES (@sessionId,@studentId,@status,@comprehensionScore,@engagementFlag,@note)
+    ON CONFLICT(session_id,student_id) DO UPDATE SET status=excluded.status,comprehension_score=excluded.comprehension_score,engagement_flag=excluded.engagement_flag,note=excluded.note`);
+  db.transaction(()=>{for(const raw of records){
+    const studentId=text(raw?.studentId); const status=text(raw?.status).toLowerCase();
+    if(!studentId||!attendanceStatuses.has(status))throw new TypeError('invalid attendance record');
+    if(!enrolled.get(session.program_id,studentId))throw new TypeError('student is not enrolled in this program');
+    const comprehensionScore=raw?.comprehensionScore==null||raw.comprehensionScore===''?null:Number(raw.comprehensionScore);
+    if(comprehensionScore!==null&&(!Number.isInteger(comprehensionScore)||comprehensionScore<1||comprehensionScore>5))throw new TypeError('comprehensionScore must be 1-5');
+    const engagementFlag=raw?.engagementFlag?text(raw.engagementFlag).toLowerCase():null;
+    if(engagementFlag&&!engagementFlags.has(engagementFlag))throw new TypeError('invalid engagementFlag');
+    upsert.run({sessionId,studentId,status,comprehensionScore,engagementFlag,note:text(raw?.note)||null});
+  }})();
+  return db.prepare(`SELECT a.student_id AS studentId,s.display_name AS displayName,a.status,a.comprehension_score AS comprehensionScore,a.engagement_flag AS engagementFlag,a.note FROM attendance a JOIN students s ON s.id=a.student_id WHERE a.session_id=? ORDER BY s.display_name`).all(sessionId);
+}
+
+export function studentProfile(db,studentId){
+  const student=db.prepare(`SELECT s.id,s.display_name AS displayName,s.status,s.age_band AS ageBand,s.school_grade AS schoolGrade,s.current_level AS currentLevel,s.target_level AS targetLevel,s.player_id AS playerId,p.username AS linkedUsername,p.platform AS linkedPlatform FROM students s LEFT JOIN players p ON p.id=s.player_id WHERE s.id=?`).get(studentId);
+  if(!student)return null;
+  const guardians=db.prepare(`SELECT g.id,g.name,g.email,g.phone,g.preferred_channel AS preferredChannel,sg.relationship,sg.is_primary AS isPrimary FROM student_guardians sg JOIN guardians g ON g.id=sg.guardian_id WHERE sg.student_id=? ORDER BY sg.is_primary DESC,g.name`).all(studentId);
+  const enrollments=db.prepare(`SELECT e.id,e.status,e.cohort_tier AS cohortTier,e.initial_level AS initialLevel,e.current_level AS enrollmentLevel,p.id AS programId,p.name AS programName,p.program_type AS programType,p.start_date AS startDate,p.end_date AS endDate,p.planned_weeks AS plannedWeeks,s.name AS schoolName FROM enrollments e JOIN programs p ON p.id=e.program_id LEFT JOIN schools s ON s.id=p.school_id WHERE e.student_id=? ORDER BY COALESCE(p.start_date,'') DESC,p.name`).all(studentId);
+  const skills=db.prepare(`SELECT ss.skill_id AS skillId,cs.code,cs.title,cs.domain,ss.status,ss.confidence,ss.last_assessed_at AS lastAssessedAt FROM student_skills ss JOIN curriculum_skills cs ON cs.id=ss.skill_id WHERE ss.student_id=? ORDER BY cs.rating_min,cs.domain,cs.title`).all(studentId);
+  const assessments=db.prepare(`SELECT id,kind,overall_level AS overallLevel,score_json AS scoreJson,coach_note AS coachNote,assessed_at AS assessedAt FROM assessments WHERE student_id=? ORDER BY assessed_at DESC LIMIT 20`).all(studentId);
+  const findings=db.prepare(`SELECT f.id,f.finding_type AS findingType,f.severity,f.note,f.fen_before AS fenBefore,f.move_played AS movePlayed,f.best_move AS bestMove,f.created_at AS createdAt,cs.title AS skillTitle FROM student_game_findings f LEFT JOIN curriculum_skills cs ON cs.id=f.skill_id WHERE f.student_id=? ORDER BY f.created_at DESC LIMIT 20`).all(studentId);
+  const notes=db.prepare(`SELECT id,visibility,note,created_at AS createdAt FROM coach_notes WHERE student_id=? ORDER BY created_at DESC LIMIT 30`).all(studentId);
+  const attendance=db.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,ROUND(AVG(comprehension_score),2) AS avgComprehension FROM attendance WHERE student_id=?`).get(studentId);
+  return {student,guardians,enrollments,skills,assessments,findings,notes,attendance};
+}
+
+export function addCoachNote(db,studentId,input={}){
+  if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))throw new TypeError('student not found');
+  const note=text(input.note); if(!note)throw new TypeError('note is required');
+  const visibility=text(input.visibility||'coach_only').toLowerCase();
+  if(!['coach_only','guardian_visible','school_visible'].includes(visibility))throw new TypeError('invalid visibility');
+  const row={id:id('NOTE'),studentId,programId:input.programId||null,sessionId:input.sessionId||null,visibility,note};
+  db.prepare('INSERT INTO coach_notes(id,student_id,program_id,session_id,visibility,note) VALUES (@id,@studentId,@programId,@sessionId,@visibility,@note)').run(row);
+  return row;
+}
