@@ -26,3 +26,19 @@ test('student can belong to a school program without a platform account',()=>{
   assert.equal(db.prepare('SELECT player_id FROM students WHERE id=?').get('S1').player_id,null);
   db.close();
 });
+
+test('academic telemetry and curriculum graph constraints are available',()=>{
+  const db=openDatabase(':memory:');
+  const columns=table=>new Set(db.prepare(`PRAGMA table_info(${table})`).all().map(row=>row.name));
+  assert.ok(columns('enrollments').has('cohort_tier'));
+  assert.ok(columns('attendance').has('comprehension_score'));
+  assert.ok(columns('attendance').has('engagement_flag'));
+  assert.ok(columns('session_lessons').has('delivery_stage'));
+  assert.ok(columns('assignments').has('skill_id'));
+  assert.ok(columns('student_game_findings').has('fen_before'));
+  assert.ok(columns('student_game_findings').has('move_played'));
+  assert.ok(columns('student_game_findings').has('best_move'));
+  assert.ok(columns('coach_notes').has('visibility'));
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='curriculum_skill_dependencies'").get().n,1);
+  db.close();
+});

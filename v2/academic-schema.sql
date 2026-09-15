@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
   left_at TEXT,
   initial_level INTEGER,
   current_level INTEGER,
+  cohort_tier TEXT,
   UNIQUE(program_id,student_id)
 );
 
@@ -79,6 +80,8 @@ CREATE TABLE IF NOT EXISTS attendance (
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK(status IN ('present','absent','late','excused')),
   note TEXT,
+  comprehension_score INTEGER CHECK(comprehension_score BETWEEN 1 AND 5),
+  engagement_flag TEXT CHECK(engagement_flag IN ('focused','distracted','disruptive')),
   PRIMARY KEY(session_id,student_id)
 );
 
@@ -94,10 +97,20 @@ CREATE TABLE IF NOT EXISTS curriculum_skills (
   active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
 );
 
+
+
+CREATE TABLE IF NOT EXISTS curriculum_skill_dependencies (
+  skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+  prerequisite_skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+  dependency_type TEXT NOT NULL DEFAULT 'required' CHECK(dependency_type IN ('required','recommended')),
+  PRIMARY KEY(skill_id,prerequisite_skill_id),
+  CHECK(skill_id <> prerequisite_skill_id)
+);
+
 CREATE TABLE IF NOT EXISTS student_skills (
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'not_started' CHECK(status IN ('not_started','learning','independent','applied')),
+  status TEXT NOT NULL DEFAULT 'unseen' CHECK(status IN ('unseen','introduced','practicing','drill_mastered','applied_in_game','regressed')),
   confidence INTEGER CHECK(confidence BETWEEN 0 AND 100),
   evidence_json TEXT NOT NULL DEFAULT '{}',
   last_assessed_at TEXT,
@@ -121,6 +134,7 @@ CREATE TABLE IF NOT EXISTS session_lessons (
   session_id TEXT NOT NULL REFERENCES class_sessions(id) ON DELETE CASCADE,
   lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
   sequence_no INTEGER NOT NULL DEFAULT 1,
+  delivery_stage TEXT NOT NULL DEFAULT 'theory_only' CHECK(delivery_stage IN ('theory_only','solved_exercises','practice_games','assessment_applied')),
   PRIMARY KEY(session_id,lesson_id)
 );
 
@@ -129,6 +143,7 @@ CREATE TABLE IF NOT EXISTS assignments (
   student_id TEXT REFERENCES students(id) ON DELETE CASCADE,
   program_id TEXT REFERENCES programs(id) ON DELETE CASCADE,
   session_id TEXT REFERENCES class_sessions(id) ON DELETE SET NULL,
+  skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   details TEXT,
   due_at TEXT,
@@ -151,7 +166,7 @@ CREATE TABLE IF NOT EXISTS coach_notes (
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   program_id TEXT REFERENCES programs(id) ON DELETE SET NULL,
   session_id TEXT REFERENCES class_sessions(id) ON DELETE SET NULL,
-  visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','guardian')),
+  visibility TEXT NOT NULL DEFAULT 'coach_only' CHECK(visibility IN ('coach_only','guardian_visible','school_visible')),
   note TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -164,6 +179,10 @@ CREATE TABLE IF NOT EXISTS student_game_findings (
   skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
   finding_type TEXT NOT NULL,
   severity INTEGER CHECK(severity BETWEEN 1 AND 5),
+  fen_before TEXT,
+  move_played TEXT,
+  best_move TEXT,
+  coach_annotation TEXT,
   note TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(student_id,source_type,source_game_id,skill_id,finding_type)
@@ -177,3 +196,6 @@ CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id,statu
 CREATE INDEX IF NOT EXISTS idx_student_skills_status ON student_skills(student_id,status);
 CREATE INDEX IF NOT EXISTS idx_assessments_student_time ON assessments(student_id,assessed_at);
 CREATE INDEX IF NOT EXISTS idx_game_findings_student ON student_game_findings(student_id,created_at);
+
+CREATE INDEX IF NOT EXISTS idx_skill_dependencies_prereq ON curriculum_skill_dependencies(prerequisite_skill_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_skill ON assignments(skill_id);
