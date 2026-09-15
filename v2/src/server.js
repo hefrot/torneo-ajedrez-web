@@ -21,6 +21,7 @@ import {LichessClient} from './providers/lichess.js';
 import {ChessComClient} from './providers/chesscom.js';
 import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent,saveSessionAttendance,studentProfile,addCoachNote} from './academic.js';
 import {coachDashboard} from './coach-dashboard.js';
+import {seedSeedsCurriculum,listCurriculum,assignLessonToSession,recommendNextSeedsLesson} from './curriculum.js';
 
 const app=express();
 const db=openDatabase();
@@ -92,6 +93,9 @@ app.post('/api/admin/players/:id/accounts/verify',adminOnly,async(req,res,next)=
   }
 });
 app.get('/api/admin/coach/dashboard',adminOnly,(req,res)=>{try{res.json(coachDashboard(db));}catch(error){res.status(500).json({error:'coach dashboard unavailable'});}});
+app.get('/api/admin/curriculum',adminOnly,(_q,res)=>res.json(listCurriculum(db)));
+app.get('/api/admin/students/:id/next-lesson',adminOnly,(req,res)=>{const lesson=recommendNextSeedsLesson(db,req.params.id);res.json({lesson});});
+app.post('/api/admin/sessions/:id/lessons',adminOnly,(req,res)=>{try{res.status(201).json(assignLessonToSession(db,{sessionId:req.params.id,lessonId:req.body?.lessonId,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
 app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/schools',adminOnly,(_q,res)=>res.json(listSchools(db)));

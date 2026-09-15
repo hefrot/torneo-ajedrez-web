@@ -51,12 +51,13 @@ async function saveAttendance(card){
   state.textContent='✓ Guardado'; setTimeout(()=>state.textContent='',1800);
 }
 async function openStudent(studentId){
-  activeStudentId=studentId; const d=await api(`../api/admin/students/${encodeURIComponent(studentId)}/profile`);
+  activeStudentId=studentId; const [d,nextData]=await Promise.all([api(`../api/admin/students/${encodeURIComponent(studentId)}/profile`),api(`../api/admin/students/${encodeURIComponent(studentId)}/next-lesson`)]);
+  const nextLesson=nextData.lesson;
   $('#student-title').textContent=d.student.displayName;
   const recentSkills=d.skills.slice(0,8).map(s=>`<li>${esc(s.title)} <span class="status-badge">${esc(s.status)}</span></li>`).join('')||'<li>Sin skills evaluadas todavía</li>';
   const programs=d.enrollments.map(e=>`<li>${esc(e.schoolName||e.programName)} · ${esc(e.programName)}${e.cohortTier?' · '+esc(e.cohortTier):''}</li>`).join('')||'<li>Sin programas</li>';
   const notes=d.notes.slice(0,6).map(n=>`<li><strong>${esc(n.visibility)}</strong> · ${esc(n.note)}</li>`).join('')||'<li>Sin notas</li>';
-  $('#student-profile').innerHTML=`<div class="profile-stats"><article><strong>${d.student.currentLevel??'—'}</strong><span>Nivel actual</span></article><article><strong>${d.attendance.present||0}/${d.attendance.total||0}</strong><span>Asistencia</span></article><article><strong>${d.attendance.avgComprehension??'—'}</strong><span>Comprensión prom.</span></article></div><h3>Programas</h3><ul>${programs}</ul><h3>Skills recientes</h3><ul>${recentSkills}</ul><h3>Notas</h3><ul>${notes}</ul>`;
+  $('#student-profile').innerHTML=`<div class="profile-stats"><article><strong>${d.student.currentLevel??'—'}</strong><span>Nivel actual</span></article><article><strong>${d.attendance.present||0}/${d.attendance.total||0}</strong><span>Asistencia</span></article><article><strong>${d.attendance.avgComprehension??'—'}</strong><span>Comprensión prom.</span></article></div><div class="next-lesson-box"><small>Siguiente lección sugerida</small><strong>${esc(nextLesson?.title||'Sin recomendación todavía')}</strong>${nextLesson?.objective?`<p>${esc(nextLesson.objective)}</p>`:''}</div><h3>Programas</h3><ul>${programs}</ul><h3>Skills recientes</h3><ul>${recentSkills}</ul><h3>Notas</h3><ul>${notes}</ul>`;
   if(!$('#student-dialog').open)$('#student-dialog').showModal();
 }
 async function load(){
