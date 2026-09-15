@@ -1,5 +1,8 @@
+const localDate=(date,timeZone=process.env.COACH_TIMEZONE||'America/Los_Angeles')=>new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
+
 export function coachDashboard(db,{now=new Date()}={}){
-  const today=now.toISOString().slice(0,10);
+  const today=localDate(now);
+  const nextWeek=localDate(new Date(now.getTime()+7*86400000));
   const sessions=db.prepare(`
     SELECT cs.id,cs.starts_at,cs.duration_minutes,cs.week_no,cs.title,cs.status,
            p.id AS program_id,p.name AS program_name,p.program_type,p.planned_weeks,
@@ -37,6 +40,17 @@ export function coachDashboard(db,{now=new Date()}={}){
     };
   });
 
+  const upcomingSessions=db.prepare(`
+    SELECT cs.id,cs.starts_at,cs.duration_minutes,cs.week_no,cs.title,cs.status,
+           p.id AS program_id,p.name AS program_name,p.program_type,p.planned_weeks,
+           s.name AS school_name,
+           (SELECT COUNT(*) FROM enrollments e WHERE e.program_id=p.id AND e.status='active') AS roster_count
+    FROM class_sessions cs JOIN programs p ON p.id=cs.program_id
+    LEFT JOIN schools s ON s.id=p.school_id
+    WHERE substr(cs.starts_at,1,10)>? AND substr(cs.starts_at,1,10)<=? AND cs.status!='cancelled'
+    ORDER BY cs.starts_at
+  `).all(today,nextWeek);
+
   const alerts=[];
   const lowComprehension=db.prepare(`
     SELECT st.id,st.display_name,a.comprehension_score,cs.starts_at,p.name AS program_name
@@ -72,6 +86,7 @@ export function coachDashboard(db,{now=new Date()}={}){
       alerts:alerts.length
     },
     todaySessions,
+    upcomingSessions,
     alerts,
     programs
   };
