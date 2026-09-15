@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Coach Dashboard · HMENA Chess</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <div class="preview-ribbon">COACH PORTAL · STAGING</div>
+  <div class="shell coach-shell">
+    <nav class="topbar">
+      <a class="brand" href="../"><span class="brand-mark">♞</span><span>HMENA Chess<small>COACH DASHBOARD</small></span></a>
+      <button id="reload" class="btn btn-secondary">Actualizar</button>
+    </nav>
+    <header class="coach-hero">
+      <div><span class="eyebrow">Centro operativo</span><h1>Hoy</h1><p id="date">Cargando...</p></div>
+      <div class="coach-key"><label>Admin key<input id="admin-key" class="field" type="password" placeholder="Solo staging"></label><button id="save-key" class="btn btn-primary">Entrar</button></div>
+    </header>
+    <section id="dashboard" hidden>
+      <div class="stat-grid" id="summary"></div>
+      <section class="section"><div class="section-head"><div><h2>Clases de hoy</h2><p>Qué toca, quién viene y qué necesita acción.</p></div></div><div id="sessions" class="coach-stack"></div></section>
+      <section class="section"><div class="section-head"><div><h2>Alertas pedagógicas</h2><p>Prioridades que conviene revisar antes de la siguiente clase.</p></div></div><div id="alerts" class="coach-stack"></div></section>
+      <section class="section"><div class="section-head"><div><h2>Programas activos</h2><p>Escuelas, privados y grupos en una sola vista.</p></div></div><div id="programs" class="coach-stack"></div></section>
+    </section>
+    <p id="error" class="form-message"></p>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

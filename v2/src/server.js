@@ -20,6 +20,7 @@ import {GameValidationError} from './game-validation.js';
 import {LichessClient} from './providers/lichess.js';
 import {ChessComClient} from './providers/chesscom.js';
 import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent} from './academic.js';
+import {coachDashboard} from './coach-dashboard.js';
 
 const app=express();
 const db=openDatabase();
@@ -90,6 +91,7 @@ app.post('/api/admin/players/:id/accounts/verify',adminOnly,async(req,res,next)=
     next(error);
   }
 });
+app.get('/api/admin/coach/dashboard',adminOnly,(req,res)=>{try{res.json(coachDashboard(db));}catch(error){res.status(500).json({error:'coach dashboard unavailable'});}});
 app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
 app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/schools',adminOnly,(_q,res)=>res.json(listSchools(db)));
