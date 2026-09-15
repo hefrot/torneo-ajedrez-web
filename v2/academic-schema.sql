@@ -85,10 +85,24 @@ CREATE TABLE IF NOT EXISTS attendance (
   PRIMARY KEY(session_id,student_id)
 );
 
+CREATE TABLE IF NOT EXISTS curriculum_tracks (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  stage TEXT,
+  age_range TEXT,
+  lesson_count INTEGER,
+  default_duration_minutes INTEGER,
+  main_focus TEXT,
+  sequence_no INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
+);
+
 CREATE TABLE IF NOT EXISTS curriculum_skills (
   id TEXT PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
+  track_id TEXT REFERENCES curriculum_tracks(id) ON DELETE SET NULL,
   domain TEXT NOT NULL CHECK(domain IN ('fundamentals','tactics','calculation','strategy','openings','endgames','thinking','competition')),
   rating_min INTEGER,
   rating_max INTEGER,
@@ -199,3 +213,5 @@ CREATE INDEX IF NOT EXISTS idx_game_findings_student ON student_game_findings(st
 
 CREATE INDEX IF NOT EXISTS idx_skill_dependencies_prereq ON curriculum_skill_dependencies(prerequisite_skill_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_skill ON assignments(skill_id);
+
+CREATE INDEX IF NOT EXISTS idx_curriculum_skills_track ON curriculum_skills(track_id,active);

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {runMigrations} from './migrations.js';
 
 export function openDatabase(path = process.env.DATABASE_PATH || './data/league.sqlite') {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -10,6 +11,7 @@ export function openDatabase(path = process.env.DATABASE_PATH || './data/league.
   const academicSchemaPath = fileURLToPath(new URL('../academic-schema.sql', import.meta.url));
   db.exec(readFileSync(schemaPath, 'utf8'));
   db.exec(readFileSync(academicSchemaPath, 'utf8'));
+  runMigrations(db);
   return db;
 }
 export function listPlayers(db,{registeredOnly=false}={}){const where=registeredOnly?" WHERE registration_status='registered'":'';return db.prepare(`SELECT * FROM players${where} ORDER BY name`).all();}

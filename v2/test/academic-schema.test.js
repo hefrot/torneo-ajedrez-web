@@ -4,7 +4,7 @@ import {openDatabase} from '../src/db.js';
 
 const expectedTables=[
   'students','guardians','student_guardians','schools','programs','enrollments',
-  'class_sessions','attendance','curriculum_skills','student_skills','lessons',
+  'class_sessions','attendance','curriculum_tracks','curriculum_skills','student_skills','lessons',
   'session_lessons','assignments','assessments','coach_notes','student_game_findings'
 ];
 
@@ -40,5 +40,13 @@ test('academic telemetry and curriculum graph constraints are available',()=>{
   assert.ok(columns('student_game_findings').has('best_move'));
   assert.ok(columns('coach_notes').has('visibility'));
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='curriculum_skill_dependencies'").get().n,1);
+  db.close();
+});
+
+test('academic migrations are idempotent and add curriculum track linkage',()=>{
+  const db=openDatabase(':memory:');
+  const columns=db.prepare("PRAGMA table_info(curriculum_skills)").all().map(row=>row.name);
+  assert.ok(columns.includes('track_id'));
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM schema_migrations WHERE id='academic-tracks-v1'").get().n,1);
   db.close();
 });
