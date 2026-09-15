@@ -346,3 +346,150 @@ CREATE TABLE IF NOT EXISTS season_control (
 
 INSERT OR IGNORE INTO season_control (id,registration_state,season_status,registration_opened_at)
 VALUES (1,'OPEN','REGISTRATION',CURRENT_TIMESTAMP);
+
+CREATE TABLE IF NOT EXISTS account_verification_state (
+  account_id TEXT PRIMARY KEY REFERENCES player_accounts(id) ON DELETE CASCADE,
+  profile_verified INTEGER NOT NULL DEFAULT 0 CHECK(profile_verified IN (0,1)),
+  profile_verification_source TEXT,
+  profile_verified_at TEXT,
+  ownership_verification TEXT NOT NULL DEFAULT 'pending'
+    CHECK(ownership_verification IN ('not_required','pending','oauth','manual')),
+  ownership_verified_at TEXT,
+  ownership_verified_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS player_access_tokens (
+  id TEXT PRIMARY KEY,
+  player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT,
+  last_used_at TEXT,
+  revoked_at TEXT,
+  created_by TEXT NOT NULL DEFAULT 'registration',
+  rotated_from_id TEXT REFERENCES player_access_tokens(id)
+);
+CREATE INDEX IF NOT EXISTS idx_player_access_active ON player_access_tokens(player_id,revoked_at,expires_at);
+
+CREATE TABLE IF NOT EXISTS league_rule_config (
+  rule_key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL,
+  approval_state TEXT NOT NULL DEFAULT 'PENDING' CHECK(approval_state IN ('APPROVED','PENDING')),
+  description TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by TEXT
+);
+INSERT OR IGNORE INTO league_rule_config(rule_key,value_json,approval_state,description) VALUES
+('games_per_opponent','3','APPROVED','Official games required against every opponent'),
+('scoring','{"win":3,"draw":1,"loss":0}','APPROVED','Official league points'),
+('allowed_platforms','["lichess","chesscom"]','APPROVED','Platforms accepted for official games'),
+('standard_variant_required','true','APPROVED','Only standard chess counts'),
+('time_control','{"mode":"organizer_decision","allowed":[]}','PENDING','Accepted time controls'),
+('rated_requirement','"organizer_decision"','PENDING','Whether games must be rated or unrated'),
+('color_policy','"any"','PENDING','Color assignment policy'),
+('registration_deadline','null','PENDING','Registration deadline; never closes automatically while pending'),
+('season_max_days','null','PENDING','Maximum season duration'),
+('reminder_thresholds','{"reminder_hours":18,"urgent_hours":23,"activity_alert_hours":24}','PENDING','Reminder and activity alert thresholds'),
+('accepted_challenge_deadline_policy','null','PENDING','Deadline after an accepted challenge'),
+('forfeit_policy','{"automatic_24h_forfeit":false,"method":"manual_adjudication"}','PENDING','Forfeit policy'),
+('tiebreak_order','["head_to_head","wins","sonneborn_berger"]','PENDING','Standings tiebreak order'),
+('playoff_policy','null','PENDING','Playoff qualification and format'),
+('ownership_requirement','"profile_only"','APPROVED','Current launch policy; profile existence is not OAuth ownership');
+
+CREATE TABLE IF NOT EXISTS official_challenges (
+  id TEXT PRIMARY KEY,
+  series_id TEXT NOT NULL REFERENCES series(id),
+  slot_id TEXT NOT NULL REFERENCES games(id),
+  platform TEXT NOT NULL CHECK(platform IN ('lichess','chesscom')),
+  provider_challenge_id TEXT,
+  challenge_url TEXT,
+  created_by_player_id TEXT NOT NULL REFERENCES players(id),
+  status TEXT NOT NULL CHECK(status IN ('CREATED','ACCEPTED','EXPIRED','CANCELLED','LINKED_TO_GAME')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS official_game_submissions (
+  id TEXT PRIMARY KEY,
+  season_key TEXT NOT NULL DEFAULT 'CURRENT',
+  series_id TEXT NOT NULL REFERENCES series(id),
+  slot_id TEXT NOT NULL REFERENCES games(id),
+  expected_player1_id TEXT NOT NULL REFERENCES players(id),
+  expected_player2_id TEXT NOT NULL REFERENCES players(id),
+  expected_player1_username TEXT NOT NULL,
+  expected_player2_username TEXT NOT NULL,
+  platform TEXT NOT NULL CHECK(platform IN ('lichess','chesscom')),
+  challenge_id TEXT REFERENCES official_challenges(id),
+  external_game_id TEXT NOT NULL,
+  game_url TEXT,
+  submitted_by_player_id TEXT NOT NULL REFERENCES players(id),
+  status TEXT NOT NULL CHECK(status IN ('REPORTED','VALIDATING','PENDING_PROVIDER','VALIDATED','REJECTED','DISPUTED','VOID')),
+  eligible_at TEXT NOT NULL,
+  submitted_at TEXT NOT NULL,
+  validation_source TEXT,
+  provider_payload_sha256 TEXT,
+  validated_at TEXT,
+  rejection_reason TEXT,
+  dispute_reason TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  next_retry_at TEXT,
+  UNIQUE(platform,external_game_id)
+);
+CREATE INDEX IF NOT EXISTS idx_official_submission_status ON official_game_submissions(status,next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_official_submission_slot ON official_game_submissions(slot_id,status);
+
+CREATE TABLE IF NOT EXISTS official_game_validation_evidence (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL UNIQUE REFERENCES official_game_submissions(id),
+  provider TEXT NOT NULL,
+  external_game_id TEXT NOT NULL,
+  normalized_payload_json TEXT NOT NULL,
+  payload_sha256 TEXT NOT NULL,
+  validation_contract_version TEXT NOT NULL,
+  validated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS official_game_disputes (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL REFERENCES official_game_submissions(id),
+  opened_by_type TEXT NOT NULL CHECK(opened_by_type IN ('player','admin','worker')),
+  opened_by_id TEXT,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN','RESOLVED','VOID')),
+  created_at TEXT NOT NULL,
+  resolved_at TEXT,
+  resolution TEXT
+);
+
+CREATE TABLE IF NOT EXISTS league_audit_events (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  actor_id TEXT,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  details_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_league_audit_entity ON league_audit_events(entity_type,entity_id,created_at);
+
+CREATE TABLE IF NOT EXISTS job_runs (
+  id TEXT PRIMARY KEY,
+  job_name TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('RUNNING','SUCCEEDED','FAILED')),
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  counts_json TEXT,
+  error_category TEXT
+);
+CREATE TABLE IF NOT EXISTS job_dead_letters (
+  id TEXT PRIMARY KEY,
+  job_name TEXT NOT NULL,
+  entity_id TEXT,
+  error_category TEXT NOT NULL,
+  safe_message TEXT NOT NULL,
+  retry_after TEXT,
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+);

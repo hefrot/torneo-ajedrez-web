@@ -33,6 +33,7 @@
           <button class="btn btn-primary submit" type="submit">♟ Confirmar mi lugar</button>
         </form>
         <p id="register-message" class="form-message" aria-live="polite"></p>
+        <p id="access-warning" class="small-note" hidden>Acceso privado guardado en este dispositivo. No compartas el token ni borres los datos del navegador. <a href="/preview-v2/jugador/">Abrir mi panel privado</a>.</p>
         <p class="small-note">Solo aparecen públicamente jugadores cuya cuenta existe y fue verificada por el sistema. Tu teléfono no se publica.</p>
         <div class="divider"></div>
         <div class="registration-social">
@@ -72,6 +73,7 @@
         message.textContent=data.matchedHistory
           ? '✓ Cuenta verificada. Recuperamos tu historial y quedaste confirmado para la liga.'
           : '✓ Cuenta verificada. Quedaste confirmado para la liga.';
+        if(data.playerAccessToken){localStorage.setItem('hmena_chess_player_access_token',data.playerAccessToken);document.querySelector('#access-warning').hidden=false;}
         form.reset();
       }catch(error){
         message.className='form-message error';

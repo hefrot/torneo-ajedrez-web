@@ -71,6 +71,12 @@ export class ChessComClient {
     }
     return batches;
   }
+
+  async findGame(username, externalGameId, months = 3) {
+    const games = await this.getRecentGames(username, months);
+    return games.find(game => game.url?.match(/\/(\d+)(?:\/?$|\?)/)?.[1] === String(externalGameId)
+      || String(game.uuid || '') === String(externalGameId)) ?? null;
+  }
 }
 
 export function chessComRating(
