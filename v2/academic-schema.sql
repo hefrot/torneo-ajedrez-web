@@ -214,4 +214,3 @@ CREATE INDEX IF NOT EXISTS idx_game_findings_student ON student_game_findings(st
 CREATE INDEX IF NOT EXISTS idx_skill_dependencies_prereq ON curriculum_skill_dependencies(prerequisite_skill_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_skill ON assignments(skill_id);
 
-CREATE INDEX IF NOT EXISTS idx_curriculum_skills_track ON curriculum_skills(track_id,active);
