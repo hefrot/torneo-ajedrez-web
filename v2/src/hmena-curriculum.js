@@ -183,6 +183,20 @@ export function placeStudentInHmena(db,{studentId,bandCode,source='manual',confi
   return {studentId,bandCode,source,confidence};
 }
 
+const hmenaStatuses=new Set(['unseen','introduced','practicing','drill_mastered','applied_in_game','regressed']);
+export function setHmenaSkillStatus(db,{studentId,skillCode,status,confidence=null,evidence={}}){
+  if(!hmenaStatuses.has(status))throw new TypeError('invalid skill status');
+  if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))throw new TypeError('student not found');
+  const skill=db.prepare(`SELECT s.id FROM curriculum_skills s JOIN curriculum_tracks t ON t.id=s.track_id WHERE s.code=? AND t.framework_id=?`).get(skillCode,HMENA_FRAMEWORK_ID);
+  if(!skill)throw new TypeError('HMENA skill not found');
+  const conf=confidence==null||confidence===''?null:Number(confidence);if(conf!==null&&(!Number.isInteger(conf)||conf<0||conf>100))throw new TypeError('confidence must be 0-100');
+  db.prepare(`INSERT INTO student_skills(student_id,skill_id,status,confidence,evidence_json,last_assessed_at,updated_at)
+    VALUES (?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+    ON CONFLICT(student_id,skill_id) DO UPDATE SET status=excluded.status,confidence=excluded.confidence,evidence_json=excluded.evidence_json,last_assessed_at=excluded.last_assessed_at,updated_at=CURRENT_TIMESTAMP`)
+    .run(studentId,skill.id,status,conf,JSON.stringify({source:'coach_manual',...(evidence||{})}));
+  return {studentId,skillCode,status,confidence:conf};
+}
+
 export function getHmenaPlacement(db,studentId){
   return db.prepare(`SELECT p.student_id AS studentId,t.code AS bandCode,t.title AS bandTitle,t.rating_min AS ratingMin,t.rating_max AS ratingMax,p.placement_source AS source,p.confidence,p.note,p.updated_at AS updatedAt
     FROM student_curriculum_placements p JOIN curriculum_tracks t ON t.id=p.track_id WHERE p.student_id=? AND p.framework_id=?`).get(studentId,HMENA_FRAMEWORK_ID)||null;

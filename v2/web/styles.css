@@ -19,3 +19,6 @@
 @media(max-width:900px){.attendance-row{grid-template-columns:1fr 1fr}.attendance-row .student-link{grid-column:1/-1}.attendance-note{grid-column:1/-1}.attendance-save{justify-content:stretch}.attendance-save .btn{flex:1}}
 @media(max-width:520px){.attendance-row{grid-template-columns:1fr}.attendance-row .student-link,.attendance-note{grid-column:auto}.profile-stats{grid-template-columns:1fr 1fr}.profile-stats article:last-child{grid-column:1/-1}.student-dialog{padding:14px;border-radius:18px}}
 .next-lesson-box{margin:14px 0;padding:15px;border:1px solid rgba(244,201,93,.25);border-radius:16px;background:rgba(244,201,93,.06)}.next-lesson-box small{display:block;color:var(--muted);font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.07em}.next-lesson-box strong{display:block;margin-top:5px;color:var(--accent-2)}.next-lesson-box p{margin:6px 0 0;color:var(--soft);font-size:12px;line-height:1.45}
+
+.inline-editor{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.55rem}.inline-editor .field{min-width:180px;flex:1}.skill-priority{margin-bottom:.8rem}.skill-priority small{color:var(--muted)}
+@media(max-width:640px){.inline-editor{align-items:stretch}.inline-editor .field,.inline-editor .btn{width:100%}}

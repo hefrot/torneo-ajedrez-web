@@ -50,16 +50,18 @@ async function saveAttendance(card){
   await api(`../api/admin/sessions/${encodeURIComponent(sessionId)}/attendance`,{method:'PUT',body:JSON.stringify({records})});
   state.textContent='✓ Guardado'; setTimeout(()=>state.textContent='',1800);
 }
+const skillStatusOptions=current=>[['unseen','No visto'],['introduced','Introducido'],['practicing','Practicando'],['drill_mastered','Dominó ejercicio'],['applied_in_game','Aplicado en partida'],['regressed','Regresión']].map(([v,l])=>`<option value="${v}"${v===current?' selected':''}>${l}</option>`).join('');
 async function openStudent(studentId){
-  activeStudentId=studentId; const [d,nextData,learning]=await Promise.all([api(`../api/admin/students/${encodeURIComponent(studentId)}/profile`),api(`../api/admin/students/${encodeURIComponent(studentId)}/next-lesson`),api(`../api/admin/students/${encodeURIComponent(studentId)}/learning-priorities`)]);
+  activeStudentId=studentId; const [d,nextData,learning,curriculum]=await Promise.all([api(`../api/admin/students/${encodeURIComponent(studentId)}/profile`),api(`../api/admin/students/${encodeURIComponent(studentId)}/next-lesson`),api(`../api/admin/students/${encodeURIComponent(studentId)}/learning-priorities`),api('../api/admin/curriculum/hmena')]);
   const nextLesson=nextData.lesson;
   $('#student-title').textContent=d.student.displayName;
   const recentSkills=d.skills.slice(0,8).map(s=>`<li>${esc(s.title)} <span class="status-badge">${esc(s.status)}</span></li>`).join('')||'<li>Sin skills evaluadas todavía</li>';
   const programs=d.enrollments.map(e=>`<li>${esc(e.schoolName||e.programName)} · ${esc(e.programName)}${e.cohortTier?' · '+esc(e.cohortTier):''}</li>`).join('')||'<li>Sin programas</li>';
   const notes=d.notes.slice(0,6).map(n=>`<li><strong>${esc(n.visibility)}</strong> · ${esc(n.note)}</li>`).join('')||'<li>Sin notas</li>';
-  const priorities=learning.priorities?.map(p=>`<li><strong>${esc(p.title)}</strong> · ${esc(p.status)}<br><small>${esc(p.reason)}</small></li>`).join('')||'<li>Requiere evaluación/colocación HMENA antes de recomendar skills.</li>';
+  const priorities=learning.priorities?.map(p=>`<li class="skill-priority" data-skill-code="${esc(p.code)}"><strong>${esc(p.title)}</strong><br><small>${esc(p.reason)}</small><div class="inline-editor"><select class="field skill-status">${skillStatusOptions(p.status)}</select><button class="btn btn-secondary save-skill" type="button">Guardar</button></div></li>`).join('')||'<li>Requiere evaluación/colocación HMENA antes de recomendar skills.</li>';
   const band=learning.placement?`${esc(learning.placement.bandTitle)} · ${learning.placement.ratingMin}–${learning.placement.ratingMax}`:'Sin colocación HMENA';
-  $('#student-profile').innerHTML=`<div class="profile-stats"><article><strong>${d.student.currentLevel??'—'}</strong><span>Nivel actual</span></article><article><strong>${d.attendance.present||0}/${d.attendance.total||0}</strong><span>Asistencia</span></article><article><strong>${d.attendance.avgComprehension??'—'}</strong><span>Comprensión prom.</span></article></div><div class="next-lesson-box"><small>HMENA 0–2500</small><strong>${band}</strong></div><div class="next-lesson-box"><small>Continuidad de clase</small><strong>${esc(nextLesson?.title||'Sin secuencia asignada')}</strong>${nextLesson?.objective?`<p>${esc(nextLesson.objective)}</p>`:''}</div><h3>Prioridades de aprendizaje</h3><ul>${priorities}</ul><h3>Programas</h3><ul>${programs}</ul><h3>Skills recientes</h3><ul>${recentSkills}</ul><h3>Notas</h3><ul>${notes}</ul>`;
+  const bandOptions=curriculum.bands.map(b=>`<option value="${esc(b.code)}"${learning.placement?.bandCode===b.code?' selected':''}>${esc(b.title)} · ${b.ratingMin}–${b.ratingMax}</option>`).join('');
+  $('#student-profile').innerHTML=`<div class="profile-stats"><article><strong>${d.student.currentLevel??'—'}</strong><span>Nivel actual</span></article><article><strong>${d.attendance.present||0}/${d.attendance.total||0}</strong><span>Asistencia</span></article><article><strong>${d.attendance.avgComprehension??'—'}</strong><span>Comprensión prom.</span></article></div><div class="next-lesson-box"><small>HMENA 0–2500</small><strong>${band}</strong><div class="inline-editor"><select id="placement-select" class="field"><option value="">Seleccionar banda…</option>${bandOptions}</select><button id="save-placement" class="btn btn-secondary" type="button">Guardar nivel</button></div></div><div class="next-lesson-box"><small>Continuidad de clase</small><strong>${esc(nextLesson?.title||'Sin secuencia asignada')}</strong>${nextLesson?.objective?`<p>${esc(nextLesson.objective)}</p>`:''}</div><h3>Prioridades de aprendizaje</h3><ul>${priorities}</ul><h3>Programas</h3><ul>${programs}</ul><h3>Skills recientes</h3><ul>${recentSkills}</ul><h3>Notas</h3><ul>${notes}</ul>`;
   if(!$('#student-dialog').open)$('#student-dialog').showModal();
 }
 async function load(){
@@ -73,7 +75,12 @@ async function load(){
   $('#programs').innerHTML=d.programs.length?d.programs.map(p=>`<article class="panel coach-card"><div><strong>${esc(p.school_name||p.name)}</strong><div class="row-meta">${esc(p.name)} · ${p.active_students} alumnos · Semana ${p.completed_week||0}/${p.planned_weeks||'-'}</div></div><span class="status-badge status-ok">${esc(p.status)}</span></article>`).join(''):'<div class="empty">Sin programas activos.</div>';
 }
 
+async function savePlacement(){const bandCode=$('#placement-select')?.value;if(!activeStudentId||!bandCode)return;await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/placement`,{method:'PUT',body:JSON.stringify({bandCode,source:'manual',confidence:80})});await openStudent(activeStudentId);}
+async function saveSkill(button){const row=button.closest('.skill-priority');if(!row||!activeStudentId)return;const status=row.querySelector('.skill-status').value;await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/hmena-skills/${encodeURIComponent(row.dataset.skillCode)}`,{method:'PUT',body:JSON.stringify({status,evidence:{via:'coach_portal'}})});await openStudent(activeStudentId);}
+
 document.addEventListener('click',async event=>{
+  if(event.target.closest('#save-placement')){try{await savePlacement();}catch(e){$('#error').textContent=e.message;}return;}
+  const skillSave=event.target.closest('.save-skill');if(skillSave){try{await saveSkill(skillSave);}catch(e){$('#error').textContent=e.message;}return;}
   const toggle=event.target.closest('.toggle-attendance');
   if(toggle){const editor=toggle.closest('.session-card').querySelector('.attendance-editor');editor.hidden=!editor.hidden;toggle.textContent=editor.hidden?'Tomar asistencia':'Ocultar asistencia';return;}
   const save=event.target.closest('.save-attendance');

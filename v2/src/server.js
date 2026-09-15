@@ -22,7 +22,7 @@ import {ChessComClient} from './providers/chesscom.js';
 import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent,saveSessionAttendance,studentProfile,addCoachNote} from './academic.js';
 import {coachDashboard} from './coach-dashboard.js';
 import {listCurriculum,assignLessonToSession,recommendNextLegacyLesson} from './curriculum.js';
-import {hmenaOverview,getHmenaPlacement,placeStudentInHmena,recommendLearningPriorities} from './hmena-curriculum.js';
+import {hmenaOverview,getHmenaPlacement,placeStudentInHmena,recommendLearningPriorities,setHmenaSkillStatus} from './hmena-curriculum.js';
 
 const app=express();
 const db=openDatabase();
@@ -104,6 +104,7 @@ app.get('/api/admin/students/:id/next-lesson',adminOnly,(req,res)=>{
 });
 app.get('/api/admin/students/:id/learning-priorities',adminOnly,(req,res)=>res.json(recommendLearningPriorities(db,req.params.id,{limit:req.query?.limit||5})));
 app.put('/api/admin/students/:id/placement',adminOnly,(req,res)=>{try{res.json(placeStudentInHmena(db,{studentId:req.params.id,bandCode:req.body?.bandCode,source:req.body?.source||'manual',confidence:req.body?.confidence??80,note:req.body?.note||null}));}catch(error){res.status(400).json({error:error.message});}});
+app.put('/api/admin/students/:id/hmena-skills/:code',adminOnly,(req,res)=>{try{res.json(setHmenaSkillStatus(db,{studentId:req.params.id,skillCode:req.params.code,status:req.body?.status,confidence:req.body?.confidence??null,evidence:req.body?.evidence||{}}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/sessions/:id/lessons',adminOnly,(req,res)=>{try{res.status(201).json(assignLessonToSession(db,{sessionId:req.params.id,lessonId:req.body?.lessonId,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
 app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});

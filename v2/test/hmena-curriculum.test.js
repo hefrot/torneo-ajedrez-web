@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.js';
 import {createStudent} from '../src/academic.js';
 import {seedAllCurriculum,recordLegacyLessonEvidence,recommendNextLegacyLesson} from '../src/curriculum.js';
-import {seedHmenaFramework,mapLegacyToHmena,syncLegacyEvidenceToHmena,placeStudentInHmena,recommendLearningPriorities,hmenaOverview} from '../src/hmena-curriculum.js';
+import {seedHmenaFramework,mapLegacyToHmena,syncLegacyEvidenceToHmena,placeStudentInHmena,recommendLearningPriorities,hmenaOverview,setHmenaSkillStatus} from '../src/hmena-curriculum.js';
 
 test('HMENA 0-2500 seeds seven canonical bands',()=>{
   const db=openDatabase(':memory:');
@@ -50,5 +50,17 @@ test('student without placement is flagged for assessment',()=>{
   const result=recommendLearningPriorities(db,student.id);
   assert.equal(result.needsAssessment,true);
   assert.deepEqual(result.priorities,[]);
+  db.close();
+});
+test('coach can update canonical HMENA skill status without touching legacy evidence',()=>{
+  const db=openDatabase(':memory:');
+  seedAllCurriculum(db); mapLegacyToHmena(db);
+  const student=createStudent(db,{displayName:'Manual Progress'});
+  placeStudentInHmena(db,{studentId:student.id,bandCode:'hmena-0-400'});
+  setHmenaSkillStatus(db,{studentId:student.id,skillCode:'FND-BOARD',status:'drill_mastered',confidence:90,evidence:{note:'Coach check'}});
+  const result=recommendLearningPriorities(db,student.id,{limit:3});
+  assert.equal(result.priorities.some(p=>p.code==='FND-BOARD'&&p.status==='drill_mastered'),true);
+  const legacyCount=db.prepare("SELECT COUNT(*) AS n FROM student_skills ss JOIN curriculum_skills cs ON cs.id=ss.skill_id WHERE ss.student_id=? AND cs.code LIKE 'SEEDS-%'").get(student.id).n;
+  assert.equal(legacyCount,0);
   db.close();
 });
