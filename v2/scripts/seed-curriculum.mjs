@@ -1,5 +1,10 @@
 import {openDatabase} from '../src/db.js';
-import {seedSeedsCurriculum} from '../src/curriculum.js';
+import {seedAllCurriculum} from '../src/curriculum.js';
+import {seedHmenaFramework,mapLegacyToHmena} from '../src/hmena-curriculum.js';
 const db=openDatabase();
-try{console.log(JSON.stringify(seedSeedsCurriculum(db)));}
-finally{db.close();}
+try{
+  const legacy=seedAllCurriculum(db);
+  const hmena=seedHmenaFramework(db);
+  const mapping=mapLegacyToHmena(db);
+  console.log(JSON.stringify({legacy,hmena,mapping}));
+}finally{db.close();}

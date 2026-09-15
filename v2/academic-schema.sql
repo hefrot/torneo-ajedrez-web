@@ -85,6 +85,17 @@ CREATE TABLE IF NOT EXISTS attendance (
   PRIMARY KEY(session_id,student_id)
 );
 
+CREATE TABLE IF NOT EXISTS curriculum_frameworks (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  version TEXT,
+  description TEXT,
+  canonical INTEGER NOT NULL DEFAULT 0 CHECK(canonical IN (0,1)),
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS curriculum_tracks (
   id TEXT PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
@@ -95,7 +106,11 @@ CREATE TABLE IF NOT EXISTS curriculum_tracks (
   default_duration_minutes INTEGER,
   main_focus TEXT,
   sequence_no INTEGER NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+  framework_id TEXT REFERENCES curriculum_frameworks(id) ON DELETE SET NULL,
+  rating_min INTEGER,
+  rating_max INTEGER,
+  track_kind TEXT NOT NULL DEFAULT 'legacy' CHECK(track_kind IN ('legacy','band','specialty'))
 );
 
 CREATE TABLE IF NOT EXISTS curriculum_skills (
@@ -108,6 +123,7 @@ CREATE TABLE IF NOT EXISTS curriculum_skills (
   rating_max INTEGER,
   prerequisites_json TEXT NOT NULL DEFAULT '[]',
   mastery_criteria TEXT,
+  sequence_no INTEGER NOT NULL DEFAULT 0,
   active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
 );
 
@@ -119,6 +135,25 @@ CREATE TABLE IF NOT EXISTS curriculum_skill_dependencies (
   dependency_type TEXT NOT NULL DEFAULT 'required' CHECK(dependency_type IN ('required','recommended')),
   PRIMARY KEY(skill_id,prerequisite_skill_id),
   CHECK(skill_id <> prerequisite_skill_id)
+);
+
+CREATE TABLE IF NOT EXISTS curriculum_skill_mappings (
+  source_skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+  target_skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+  relation_type TEXT NOT NULL DEFAULT 'covers' CHECK(relation_type IN ('covers','reinforces','prerequisite')),
+  weight REAL NOT NULL DEFAULT 1.0 CHECK(weight > 0 AND weight <= 1.0),
+  PRIMARY KEY(source_skill_id,target_skill_id)
+);
+
+CREATE TABLE IF NOT EXISTS student_curriculum_placements (
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  framework_id TEXT NOT NULL REFERENCES curriculum_frameworks(id) ON DELETE CASCADE,
+  track_id TEXT NOT NULL REFERENCES curriculum_tracks(id) ON DELETE RESTRICT,
+  placement_source TEXT NOT NULL DEFAULT 'manual' CHECK(placement_source IN ('manual','assessment','rating','legacy_mapping','import')),
+  confidence INTEGER CHECK(confidence BETWEEN 0 AND 100),
+  note TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(student_id,framework_id)
 );
 
 CREATE TABLE IF NOT EXISTS student_skills (
@@ -213,4 +248,5 @@ CREATE INDEX IF NOT EXISTS idx_game_findings_student ON student_game_findings(st
 
 CREATE INDEX IF NOT EXISTS idx_skill_dependencies_prereq ON curriculum_skill_dependencies(prerequisite_skill_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_skill ON assignments(skill_id);
+
 

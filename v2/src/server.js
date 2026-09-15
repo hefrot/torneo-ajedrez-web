@@ -21,7 +21,8 @@ import {LichessClient} from './providers/lichess.js';
 import {ChessComClient} from './providers/chesscom.js';
 import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent,saveSessionAttendance,studentProfile,addCoachNote} from './academic.js';
 import {coachDashboard} from './coach-dashboard.js';
-import {seedSeedsCurriculum,listCurriculum,assignLessonToSession,recommendNextSeedsLesson} from './curriculum.js';
+import {listCurriculum,assignLessonToSession,recommendNextLegacyLesson} from './curriculum.js';
+import {hmenaOverview,getHmenaPlacement,placeStudentInHmena,recommendLearningPriorities} from './hmena-curriculum.js';
 
 const app=express();
 const db=openDatabase();
@@ -94,7 +95,15 @@ app.post('/api/admin/players/:id/accounts/verify',adminOnly,async(req,res,next)=
 });
 app.get('/api/admin/coach/dashboard',adminOnly,(req,res)=>{try{res.json(coachDashboard(db));}catch(error){res.status(500).json({error:'coach dashboard unavailable'});}});
 app.get('/api/admin/curriculum',adminOnly,(_q,res)=>res.json(listCurriculum(db)));
-app.get('/api/admin/students/:id/next-lesson',adminOnly,(req,res)=>{const lesson=recommendNextSeedsLesson(db,req.params.id);res.json({lesson});});
+app.get('/api/admin/curriculum/hmena',adminOnly,(_q,res)=>res.json(hmenaOverview(db)));
+app.get('/api/admin/students/:id/next-lesson',adminOnly,(req,res)=>{
+  const placement=getHmenaPlacement(db,req.params.id);
+  const trackCode=({'hmena-0-400':'seeds','hmena-400-800':'builders','hmena-800-1200':'thinkers'})[placement?.bandCode]||null;
+  const lesson=trackCode?recommendNextLegacyLesson(db,req.params.id,trackCode):null;
+  res.json({lesson,trackCode,placement,source:lesson?'legacy_sequence':null});
+});
+app.get('/api/admin/students/:id/learning-priorities',adminOnly,(req,res)=>res.json(recommendLearningPriorities(db,req.params.id,{limit:req.query?.limit||5})));
+app.put('/api/admin/students/:id/placement',adminOnly,(req,res)=>{try{res.json(placeStudentInHmena(db,{studentId:req.params.id,bandCode:req.body?.bandCode,source:req.body?.source||'manual',confidence:req.body?.confidence??80,note:req.body?.note||null}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/sessions/:id/lessons',adminOnly,(req,res)=>{try{res.status(201).json(assignLessonToSession(db,{sessionId:req.params.id,lessonId:req.body?.lessonId,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
 app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});

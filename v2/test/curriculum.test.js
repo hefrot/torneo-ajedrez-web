@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.js';
-import {seedSeedsCurriculum,listCurriculum,recordStudentLessonEvidence,recommendNextSeedsLesson,assignLessonToSession} from '../src/curriculum.js';
+import {seedSeedsCurriculum,seedTrackCurriculum,listCurriculum,recordStudentLessonEvidence,recommendNextSeedsLesson,assignLessonToSession} from '../src/curriculum.js';
 import {createStudent,createProgram,enrollStudent} from '../src/academic.js';
 
 test('Seeds curriculum seeds idempotently in lesson order',()=>{
@@ -35,5 +35,18 @@ test('lesson can be attached to a scheduled session',()=>{
   const row=db.prepare('SELECT lesson_id AS lessonId,delivery_stage AS deliveryStage FROM session_lessons WHERE session_id=?').get('CURR-S1');
   assert.equal(row.lessonId,'LESSON-SEEDS-L8');
   assert.equal(row.deliveryStage,'theory_only');
+  db.close();
+});
+test('Builders and Thinkers seed all 20 mapped lessons and flag L11-L20 as map-only',()=>{
+  const db=openDatabase(':memory:');
+  seedSeedsCurriculum(db);
+  seedTrackCurriculum(db,'builders'); seedTrackCurriculum(db,'thinkers');
+  const data=listCurriculum(db);
+  assert.equal(data.lessons.length,50);
+  const builders=data.lessons.filter(x=>x.trackCode==='builders');
+  const thinkers=data.lessons.filter(x=>x.trackCode==='thinkers');
+  assert.equal(builders.length,20); assert.equal(thinkers.length,20);
+  assert.match(builders[19].title,/L20/); assert.equal(builders[10].content.mapOnly,true);
+  assert.match(thinkers[19].title,/L20/); assert.equal(thinkers[10].content.mapOnly,true);
   db.close();
 });

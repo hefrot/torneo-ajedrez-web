@@ -10,7 +10,7 @@
     "test": "node --test",
     "start": "node src/server.js",
     "worker": "node src/worker.js",
-    "check": "node --check src/server.js && node --check src/worker.js && node --check src/academic.js && node --check src/migrations.js && node --check src/curriculum.js && node --check src/coach-dashboard.js && node --check src/season-readiness.js && node --check src/season-control.js && node --check src/player-access.js && node --check src/game-validation.js && node --check src/official-game-service.js && node --check src/readiness-dashboard.js && node --check web/coach/app.js && node --check scripts/migrate-history.mjs && node --check scripts/build-identity-review.mjs && node --check scripts/seed-curriculum.mjs",
+    "check": "node --check src/server.js && node --check src/worker.js && node --check src/academic.js && node --check src/migrations.js && node --check src/curriculum.js && node --check src/hmena-curriculum.js && node --check src/coach-dashboard.js && node --check src/season-readiness.js && node --check src/season-control.js && node --check src/player-access.js && node --check src/game-validation.js && node --check src/official-game-service.js && node --check src/readiness-dashboard.js && node --check web/coach/app.js && node --check scripts/migrate-history.mjs && node --check scripts/build-identity-review.mjs && node --check scripts/seed-curriculum.mjs",
     "migrate:history": "node scripts/migrate-history.mjs",
     "review:identities": "node scripts/build-identity-review.mjs",
     "seed:curriculum": "node scripts/seed-curriculum.mjs"

@@ -21,6 +21,40 @@ const migrations=[
       }
       db.exec('CREATE INDEX IF NOT EXISTS idx_curriculum_skills_track ON curriculum_skills(track_id,active)');
     }
+  },
+  {
+    id:'academic-frameworks-v2',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS curriculum_frameworks (
+        id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, title TEXT NOT NULL, version TEXT,
+        description TEXT, canonical INTEGER NOT NULL DEFAULT 0 CHECK(canonical IN (0,1)),
+        active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`);
+      if(!hasColumn(db,'curriculum_tracks','framework_id')) db.exec('ALTER TABLE curriculum_tracks ADD COLUMN framework_id TEXT REFERENCES curriculum_frameworks(id) ON DELETE SET NULL');
+      if(!hasColumn(db,'curriculum_tracks','rating_min')) db.exec('ALTER TABLE curriculum_tracks ADD COLUMN rating_min INTEGER');
+      if(!hasColumn(db,'curriculum_tracks','rating_max')) db.exec('ALTER TABLE curriculum_tracks ADD COLUMN rating_max INTEGER');
+      if(!hasColumn(db,'curriculum_tracks','track_kind')) db.exec("ALTER TABLE curriculum_tracks ADD COLUMN track_kind TEXT NOT NULL DEFAULT 'legacy' CHECK(track_kind IN ('legacy','band','specialty'))");
+      if(!hasColumn(db,'curriculum_skills','sequence_no')) db.exec('ALTER TABLE curriculum_skills ADD COLUMN sequence_no INTEGER NOT NULL DEFAULT 0');
+      db.exec(`CREATE TABLE IF NOT EXISTS curriculum_skill_mappings (
+        source_skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+        target_skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+        relation_type TEXT NOT NULL DEFAULT 'covers' CHECK(relation_type IN ('covers','reinforces','prerequisite')),
+        weight REAL NOT NULL DEFAULT 1.0 CHECK(weight > 0 AND weight <= 1.0),
+        PRIMARY KEY(source_skill_id,target_skill_id)
+      );
+      CREATE TABLE IF NOT EXISTS student_curriculum_placements (
+        student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        framework_id TEXT NOT NULL REFERENCES curriculum_frameworks(id) ON DELETE CASCADE,
+        track_id TEXT NOT NULL REFERENCES curriculum_tracks(id) ON DELETE RESTRICT,
+        placement_source TEXT NOT NULL DEFAULT 'manual' CHECK(placement_source IN ('manual','assessment','rating','legacy_mapping','import')),
+        confidence INTEGER CHECK(confidence BETWEEN 0 AND 100), note TEXT,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(student_id,framework_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_curriculum_tracks_framework ON curriculum_tracks(framework_id,sequence_no);
+      CREATE INDEX IF NOT EXISTS idx_curriculum_skills_track_sequence ON curriculum_skills(track_id,sequence_no);
+      CREATE INDEX IF NOT EXISTS idx_skill_mappings_target ON curriculum_skill_mappings(target_skill_id);
+      CREATE INDEX IF NOT EXISTS idx_student_placements_track ON student_curriculum_placements(track_id);`);
+    }
   }
 ];
 export function runMigrations(db){
