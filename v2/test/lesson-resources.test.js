@@ -16,8 +16,8 @@ function setup(){
 test('0-1200 has one teach-ready base exercise per canonical lesson',()=>{
   const db=setup();
   assert.equal(lessonExerciseRows.length,30);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM lesson_exercises').get().n,30);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM lesson_exercise_localizations').get().n,60);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM lesson_exercises').get().n,90);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM lesson_exercise_localizations').get().n,180);
   assert.equal(teachingPacksOverview(db,{locale:'en'}).length,30);
   db.close();
 });
@@ -28,7 +28,8 @@ test('teaching pack localizes one canonical lesson without duplicating evidence'
   const es=lessonTeachingPack(db,'LESSON-HMENA-1200-L01',{locale:'es'});
   assert.equal(en.lesson.id,es.lesson.id);
   assert.notEqual(en.lesson.title,es.lesson.title);
-  assert.equal(en.exerciseSet.length,1);assert.equal(es.exerciseSet.length,1);
+  assert.equal(en.exerciseSet.length,3);assert.equal(es.exerciseSet.length,3);
+  assert.deepEqual(en.exerciseSet.map(x=>x.difficulty),['core','support','challenge']);
   assert.notEqual(en.exerciseSet[0].prompt,es.exerciseSet[0].prompt);
   assert.equal(en.timeline.length,6);assert.equal(es.timeline.length,6);
   assert.ok(en.coachScript.length>=4);assert.ok(es.commonErrors.length>=2);

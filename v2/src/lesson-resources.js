@@ -78,20 +78,35 @@ export const lessonExerciseRows=rows.map((r,index)=>({
   prompt:{en:r[5],es:r[6]},explanation:{en:r[7],es:r[8]},sequence:1,index:index+1
 }));
 
+function variantCopy(row,variant){
+  const langText=(lang)=>{
+    if(variant==='core')return {prompt:row.prompt[lang],explanation:row.explanation[lang]};
+    if(variant==='support')return lang==='es'?
+      {prompt:`Paso guiado: ${row.prompt.es} Antes de responder, nombra la pieza/casilla o regla más importante.`,explanation:`${row.explanation.es} El objetivo de esta variante es verbalizar el primer paso antes de decidir.`}:
+      {prompt:`Guided step: ${row.prompt.en} Before answering, name the most important piece, square, or rule.`,explanation:`${row.explanation.en} This variant scaffolds the first reasoning step before the decision.`};
+    return lang==='es'?
+      {prompt:`Reto: ${row.prompt.es} Después de resolverlo, explica la mejor defensa del rival o qué cambiaría con una pieza/casilla distinta.`,explanation:`${row.explanation.es} La respuesta debe incluir la idea y una verificación de la mejor respuesta rival.`}:
+      {prompt:`Challenge: ${row.prompt.en} After solving it, explain the opponent's best defense or what would change if one piece/square changed.`,explanation:`${row.explanation.en} The answer should include the idea plus verification of the opponent's best reply.`};
+  };
+  const sequence={core:1,support:2,challenge:3}[variant];
+  return {...row,sequence,difficulty:variant,prompt:{en:langText('en').prompt,es:langText('es').prompt},explanation:{en:langText('en').explanation,es:langText('es').explanation},solution:{...(row.solution||{}),variant}};
+}
+export const lessonExerciseVariants=lessonExerciseRows.flatMap(row=>['core','support','challenge'].map(v=>variantCopy(row,v)));
+
 export function seedLessonResources(db){
   const exercise=db.prepare(`INSERT INTO lesson_exercises(id,lesson_id,skill_id,sequence_no,exercise_type,fen,solution_json,difficulty,active)
-    VALUES (?,?,?,?,?,?,?,'core',1)
-    ON CONFLICT(id) DO UPDATE SET lesson_id=excluded.lesson_id,skill_id=excluded.skill_id,sequence_no=excluded.sequence_no,exercise_type=excluded.exercise_type,fen=excluded.fen,solution_json=excluded.solution_json,difficulty='core',active=1`);
+    VALUES (?,?,?,?,?,?,?,?,1)
+    ON CONFLICT(id) DO UPDATE SET lesson_id=excluded.lesson_id,skill_id=excluded.skill_id,sequence_no=excluded.sequence_no,exercise_type=excluded.exercise_type,fen=excluded.fen,solution_json=excluded.solution_json,difficulty=excluded.difficulty,active=1`);
   const loc=db.prepare(`INSERT INTO lesson_exercise_localizations(exercise_id,locale,prompt,explanation)
     VALUES (?,?,?,?) ON CONFLICT(exercise_id,locale) DO UPDATE SET prompt=excluded.prompt,explanation=excluded.explanation`);
   let seeded=0;
-  db.transaction(()=>{for(const row of lessonExerciseRows){
+  db.transaction(()=>{for(const row of lessonExerciseVariants){
     if(!db.prepare('SELECT 1 FROM lessons WHERE id=?').get(row.lessonId))throw new Error(`missing lesson ${row.lessonId}`);
     const sid=skillIdByCode(db,row.skillCode);if(!sid)throw new Error(`missing skill ${row.skillCode}`);
-    const id=exerciseId(row.lessonId,row.sequence);exercise.run(id,row.lessonId,sid,row.sequence,row.exerciseType,row.fen,JSON.stringify(row.solution||{}));
+    const id=exerciseId(row.lessonId,row.sequence);exercise.run(id,row.lessonId,sid,row.sequence,row.exerciseType,row.fen,JSON.stringify(row.solution||{}),row.difficulty);
     for(const lang of ['en','es'])loc.run(id,lang,row.prompt[lang],row.explanation[lang]);seeded++;
   }})();
-  return {lessons:seeded,exercises:seeded,localizations:seeded*2};
+  return {lessons:lessonExerciseRows.length,exercises:seeded,localizations:seeded*2,variantsPerLesson:3};
 }
 
 const timeline=(review,lang)=>review?(lang==='es'?
