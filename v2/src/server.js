@@ -41,6 +41,7 @@ import {cisBotMove} from './cis-bot-engine.js';
 import {analyzeAcademicGame} from './stockfish-analysis.js';
 import {progressReportPreview,createProgressReportDraft,publishProgressReport,listProgressReports} from './progress-reports.js';
 import {createStaffAccount,loginStaffAccount,authenticateStaffSession,revokeStaffSession,listStaffAccounts,resetStaffPassword} from './staff-access.js';
+import {lessonTeachingPack,seedLessonResources} from './lesson-resources.js';
 
 const app=express();
 const db=openDatabase();
@@ -150,7 +151,8 @@ app.get('/api/admin/students/:id/next-lesson',staffOnly,(req,res)=>{
   res.json({lesson,trackCode,placement,source:lesson?'legacy_sequence':null});
 });
 app.get('/api/admin/students/:id/learning-priorities',staffOnly,(req,res)=>res.json(req.query?.locale?localizedLearningPriorities(db,req.params.id,{limit:req.query?.limit||5,locale:req.query.locale}):recommendLearningPriorities(db,req.params.id,{limit:req.query?.limit||5})));
-app.get('/api/admin/students/:id/next-lesson-engine',staffOnly,(req,res)=>{const locale=req.query?.locale||'es';const data=nextLessonRecommendation(db,req.params.id,{locale});if(!data)return res.status(404).json({error:'student not found'});res.json({...data,approvedPlan:latestApprovedPlan(db,req.params.id,{locale})});});
+app.get('/api/admin/students/:id/next-lesson-engine',staffOnly,(req,res)=>{const locale=req.query?.locale||'es';seedLessonResources(db);const data=nextLessonRecommendation(db,req.params.id,{locale});if(!data)return res.status(404).json({error:'student not found'});const enrich=x=>x?.lesson?.id?{...x,teachingPack:lessonTeachingPack(db,x.lesson.id,{locale})}:x;res.json({...data,recommendation:enrich(data.recommendation),alternatives:(data.alternatives||[]).map(enrich),approvedPlan:latestApprovedPlan(db,req.params.id,{locale})});});
+app.get('/api/admin/lessons/:id/teaching-pack',staffOnly,(req,res)=>{seedLessonResources(db);const pack=lessonTeachingPack(db,req.params.id,{locale:req.query?.locale||'es'});if(!pack)return res.status(404).json({error:'lesson not found'});res.json(pack);});
 app.post('/api/admin/students/:id/next-lesson-decision',staffOnly,(req,res)=>{try{res.status(201).json(recordCoachLessonDecision(db,{studentId:req.params.id,decision:req.body?.decision||'accepted',selectedSkillCode:req.body?.selectedSkillCode||null,selectedLessonId:req.body?.selectedLessonId||null,coachNote:req.body?.coachNote||null,locale:req.body?.locale||'es',assignToNextPrivateSession:req.body?.assignToNextPrivateSession===true}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/students/:id/placement',staffOnly,(req,res)=>{try{res.json(placeStudentInHmena(db,{studentId:req.params.id,bandCode:req.body?.bandCode,source:req.body?.source||'manual',confidence:req.body?.confidence??80,note:req.body?.note||null}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/students/:id/hmena-skills/:code',staffOnly,(req,res)=>{try{res.json(setHmenaSkillStatus(db,{studentId:req.params.id,skillCode:req.params.code,status:req.body?.status,confidence:req.body?.confidence??null,evidence:req.body?.evidence||{}}));}catch(error){res.status(400).json({error:error.message});}});

@@ -472,6 +472,28 @@ CREATE INDEX IF NOT EXISTS idx_coach_lesson_decisions_student_time ON coach_less
 
 
 
+
+CREATE TABLE IF NOT EXISTS lesson_exercises (
+  id TEXT PRIMARY KEY,
+  lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+  skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
+  sequence_no INTEGER NOT NULL DEFAULT 1,
+  exercise_type TEXT NOT NULL CHECK(exercise_type IN ('board_move','board_question','reflection')),
+  fen TEXT,
+  solution_json TEXT NOT NULL DEFAULT '{}',
+  difficulty TEXT NOT NULL DEFAULT 'core',
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+  UNIQUE(lesson_id,sequence_no)
+);
+CREATE TABLE IF NOT EXISTS lesson_exercise_localizations (
+  exercise_id TEXT NOT NULL REFERENCES lesson_exercises(id) ON DELETE CASCADE,
+  locale TEXT NOT NULL CHECK(locale IN ('en','es')),
+  prompt TEXT NOT NULL,
+  explanation TEXT,
+  PRIMARY KEY(exercise_id,locale)
+);
+CREATE INDEX IF NOT EXISTS idx_lesson_exercises_skill ON lesson_exercises(skill_id,lesson_id);
+
 CREATE TABLE IF NOT EXISTS staff_accounts (
   id TEXT PRIMARY KEY,
   login_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
