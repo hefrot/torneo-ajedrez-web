@@ -6,10 +6,10 @@ import {studentRatingProgress} from './rating-tracking.js';
 
 export const NEXT_LESSON_VERSION='hmena-next-v1';
 const mastered=new Set(['drill_mastered','applied_in_game']);
-const baseScore={regressed:100,practicing:76,introduced:62,drill_mastered:34,unseen:50,applied_in_game:0};
+const baseScore={regressed:100,practicing:72,introduced:40,drill_mastered:30,unseen:55,applied_in_game:0};
 const reasonCopy={
-  en:{regressed:'Regression detected',practicing:'Still in practice',introduced:'Introduced but not mastered',unseen:'Ready for a new skill',transfer:'Needs transfer from drills to real games',games:'Recurring mistakes in recent games',puzzles:'Active puzzles from mistakes',comprehension:'Low comprehension in related classes',absence:'Missed a related class',diagnostic:'Diagnostic evidence shows a gap',opening:'Opening performance needs reinforcement',prerequisite:'Required prerequisite is not secure'},
-  es:{regressed:'Se detectó regresión',practicing:'Sigue en práctica',introduced:'Fue introducida pero no está dominada',unseen:'Está lista como habilidad nueva',transfer:'Falta transferir de ejercicios a partidas reales',games:'Errores recurrentes en partidas recientes',puzzles:'Problemas activos creados desde sus errores',comprehension:'Baja comprensión en clases relacionadas',absence:'Faltó a una clase relacionada',diagnostic:'El diagnóstico muestra un hueco',opening:'El rendimiento de apertura necesita refuerzo',prerequisite:'Un prerrequisito necesario aún no está sólido'}
+  en:{regressed:'Regression detected',practicing:'Still in practice',introduced:'Introduced but not mastered',unseen:'Ready for a new skill',transfer:'Needs transfer from drills to real games',games:'Recurring mistakes in recent games',puzzles:'Active puzzles from mistakes',comprehension:'Low comprehension in related classes',absence:'Missed a related class',diagnostic:'Diagnostic evidence shows a gap',opening:'Opening performance needs reinforcement',prerequisite:'Required prerequisite is not secure',blocked_evidence:'This prerequisite unlocks a higher-priority recurring issue'},
+  es:{regressed:'Se detectó regresión',practicing:'Sigue en práctica',introduced:'Fue introducida pero no está dominada',unseen:'Está lista como habilidad nueva',transfer:'Falta transferir de ejercicios a partidas reales',games:'Errores recurrentes en partidas recientes',puzzles:'Problemas activos creados desde sus errores',comprehension:'Baja comprensión en clases relacionadas',absence:'Faltó a una clase relacionada',diagnostic:'El diagnóstico muestra un hueco',opening:'El rendimiento de apertura necesita refuerzo',prerequisite:'Un prerrequisito necesario aún no está sólido',blocked_evidence:'Este prerrequisito desbloquea un problema recurrente de mayor prioridad'}
 };
 const parseJson=value=>{try{return JSON.parse(value||'{}');}catch{return {};}};
 const addReason=(candidate,code,weight,detail=null)=>{candidate.score+=weight;candidate.reasons.push({code,weight,detail});};
@@ -30,34 +30,40 @@ function bestLessonForSkill(db,skillId,locale){
   return localLesson(db,row?.id,locale);
 }
 function placementSkills(db,studentId,placement){
-  const rows=db.prepare(`SELECT s.id,s.code,s.title,s.domain,s.sequence_no AS sequenceNo,COALESCE(ss.status,'unseen') AS status,ss.confidence,ss.evidence_json AS evidenceJson FROM curriculum_skills s LEFT JOIN student_skills ss ON ss.student_id=? AND ss.skill_id=s.id WHERE s.track_id=(SELECT track_id FROM student_curriculum_placements WHERE student_id=? AND framework_id=?) AND s.active=1 ORDER BY s.sequence_no`).all(studentId,studentId,HMENA_FRAMEWORK_ID);
+  const rows=db.prepare(`SELECT s.id,s.code,s.title,s.domain,s.rating_min AS ratingMin,s.sequence_no AS sequenceNo,COALESCE(ss.status,'unseen') AS status,ss.confidence,ss.evidence_json AS evidenceJson FROM curriculum_skills s LEFT JOIN student_skills ss ON ss.student_id=? AND ss.skill_id=s.id WHERE s.track_id=(SELECT track_id FROM student_curriculum_placements WHERE student_id=? AND framework_id=?) AND s.active=1 ORDER BY s.sequence_no`).all(studentId,studentId,HMENA_FRAMEWORK_ID);
   return rows.map(r=>({...r,evidence:parseJson(r.evidenceJson)}));
 }
 function prerequisiteRows(db,studentId,skillId){
-  return db.prepare(`SELECT p.id,p.code,p.title,p.domain,p.sequence_no AS sequenceNo,COALESCE(ss.status,'unseen') AS status,ss.confidence,ss.evidence_json AS evidenceJson FROM curriculum_skill_dependencies d JOIN curriculum_skills p ON p.id=d.prerequisite_skill_id LEFT JOIN student_skills ss ON ss.student_id=? AND ss.skill_id=p.id WHERE d.skill_id=? AND d.dependency_type='required' ORDER BY p.sequence_no`).all(studentId,skillId).map(r=>({...r,evidence:parseJson(r.evidenceJson)}));
+  return db.prepare(`SELECT p.id,p.code,p.title,p.domain,p.rating_min AS ratingMin,p.sequence_no AS sequenceNo,COALESCE(ss.status,'unseen') AS status,ss.confidence,ss.evidence_json AS evidenceJson FROM curriculum_skill_dependencies d JOIN curriculum_skills p ON p.id=d.prerequisite_skill_id LEFT JOIN student_skills ss ON ss.student_id=? AND ss.skill_id=p.id WHERE d.skill_id=? AND d.dependency_type='required' ORDER BY p.sequence_no`).all(studentId,skillId).map(r=>({...r,evidence:parseJson(r.evidenceJson)}));
 }
-function unresolvedLeaves(db,studentId,skill,seen=new Set()){
+function prerequisiteReady(skill,placement){
+  if(mastered.has(skill.status)||['introduced','practicing'].includes(skill.status))return true;
+  const negative=skill.status==='regressed'||skill.evidence?.diagnostic?.correct===false;
+  if(skill.status==='unseen'&&!negative&&Number(skill.ratingMin||0)<Number(placement.ratingMin||0))return true;
+  return false;
+}
+function unresolvedLeaves(db,studentId,skill,placement,seen=new Set()){
   if(seen.has(skill.id))return [];
   seen.add(skill.id);
-  const prereqs=prerequisiteRows(db,studentId,skill.id).filter(p=>!mastered.has(p.status));
+  const prereqs=prerequisiteRows(db,studentId,skill.id).filter(p=>!prerequisiteReady(p,placement));
   if(!prereqs.length)return [skill];
-  return prereqs.flatMap(p=>unresolvedLeaves(db,studentId,p,seen));
+  return prereqs.flatMap(p=>unresolvedLeaves(db,studentId,p,placement,seen));
 }
 function seedCandidates(db,studentId,placement){
   const map=new Map();
   for(const skill of placementSkills(db,studentId,placement)){
     if(skill.status==='applied_in_game')continue;
-    const leaves=unresolvedLeaves(db,studentId,skill);
+    const leaves=unresolvedLeaves(db,studentId,skill,placement);
     for(const leaf of leaves){
       if(!map.has(leaf.id))map.set(leaf.id,{...leaf,score:Number(baseScore[leaf.status]||0),reasons:[],sourceSkillIds:new Set()});
       map.get(leaf.id).sourceSkillIds.add(skill.id);
-      if(leaf.id!==skill.id)addReason(map.get(leaf.id),'prerequisite',18,{forSkill:skill.code});
+      if(leaf.id!==skill.id&&!map.get(leaf.id).reasons.some(r=>r.code==='prerequisite'))addReason(map.get(leaf.id),'prerequisite',18,{forSkill:skill.code});
     }
   }
   return map;
 }
 function skillById(db,studentId,skillId){
-  const row=db.prepare(`SELECT s.id,s.code,s.title,s.domain,s.sequence_no AS sequenceNo,COALESCE(ss.status,'unseen') AS status,ss.confidence,ss.evidence_json AS evidenceJson FROM curriculum_skills s LEFT JOIN student_skills ss ON ss.student_id=? AND ss.skill_id=s.id WHERE s.id=?`).get(studentId,skillId);
+  const row=db.prepare(`SELECT s.id,s.code,s.title,s.domain,s.rating_min AS ratingMin,s.sequence_no AS sequenceNo,COALESCE(ss.status,'unseen') AS status,ss.confidence,ss.evidence_json AS evidenceJson FROM curriculum_skills s LEFT JOIN student_skills ss ON ss.student_id=? AND ss.skill_id=s.id WHERE s.id=?`).get(studentId,skillId);
   return row?{...row,evidence:parseJson(row.evidenceJson)}:null;
 }
 function ensureCandidate(db,map,studentId,skillId){
@@ -106,6 +112,18 @@ function ratingContext(db,studentId){
 function latestClassContext(db,studentId){
   return db.prepare(`SELECT cs.starts_at AS startsAt,l.id AS lessonId,l.title,a.status,a.comprehension_score AS comprehension FROM attendance a JOIN class_sessions cs ON cs.id=a.session_id LEFT JOIN session_lessons sl ON sl.session_id=cs.id LEFT JOIN lessons l ON l.id=sl.lesson_id WHERE a.student_id=? ORDER BY cs.starts_at DESC LIMIT 5`).all(studentId);
 }
+function propagateBlockedEvidence(db,map,studentId,placement){
+  const evidenceCodes=new Set(['games','puzzles','comprehension','diagnostic','opening']);
+  for(const candidate of [...map.values()]){
+    if(candidateReady(db,studentId,candidate,placement))continue;
+    const urgency=candidate.reasons.filter(r=>evidenceCodes.has(r.code)).reduce((n,r)=>n+Number(r.weight||0),0);if(!urgency)continue;
+    const leaves=unresolvedLeaves(db,studentId,candidate,placement,new Set());
+    for(const leaf of leaves){if(leaf.id===candidate.id)continue;const target=ensureCandidate(db,map,studentId,leaf.id);if(target)addReason(target,'blocked_evidence',Math.min(35,Math.round(urgency*.6)),{sourceSkill:candidate.code});}
+  }
+}
+function candidateReady(db,studentId,candidate,placement){
+  return prerequisiteRows(db,studentId,candidate.id).every(p=>prerequisiteReady(p,placement));
+}
 function actionFor(candidate){
   if(candidate.status==='regressed')return 'reassess';
   if(candidate.reasons.some(r=>r.code==='games'))return 'review_and_drill';
@@ -132,8 +150,8 @@ export function nextLessonRecommendation(db,studentId,{locale='en'}={}){
   if(!placement)return {student,locale:lang,kind:'diagnostic',placement:null,recommendation:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId)},message:lang==='es'?'Primero completa el diagnóstico HMENA para recomendar una clase.':'Complete the HMENA diagnostic before recommending a lesson.'};
   const map=seedCandidates(db,studentId,placement);for(const c of map.values())addStatusReason(c);
   applyGameEvidence(db,map,studentId);applyPuzzleEvidence(db,map,studentId);applyClassEvidence(db,map,studentId);applyDiagnosticEvidence(db,map,studentId);
-  const opening=applyOpeningEvidence(db,map,studentId,placement,lang);
-  const ranked=[...map.values()].filter(c=>c.score>0).sort((a,b)=>b.score-a.score||a.sequenceNo-b.sequenceNo);
+  const opening=applyOpeningEvidence(db,map,studentId,placement,lang);propagateBlockedEvidence(db,map,studentId,placement);
+  const ranked=[...map.values()].filter(c=>c.score>0&&candidateReady(db,studentId,c,placement)).sort((a,b)=>b.score-a.score||a.sequenceNo-b.sequenceNo);
   if(!ranked.length){const lesson=assessmentLesson(db,placement.bandCode,lang);return {student,locale:lang,kind:'assessment',placement,recommendation:lesson?{skill:null,lesson,score:0,confidence:80,action:'assess',reasons:[]}:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),opening},message:lang==='es'?'Las habilidades de la banda están sólidas; conviene reevaluar para avanzar.':'Band skills are secure; reassess for advancement.'};}
   const formatted=ranked.slice(0,4).map(c=>formatCandidate(db,c,lang));
   return {student,locale:lang,kind:'lesson',placement,recommendation:formatted[0],alternatives:formatted.slice(1),context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),opening},algorithmVersion:NEXT_LESSON_VERSION};

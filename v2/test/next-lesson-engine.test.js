@@ -45,3 +45,16 @@ test('family plan only appears after coach accepts or overrides recommendation',
   const plan=latestApprovedPlan(db,student.id,{locale:'es'});
   assert.equal(plan.skill.code,'DEV-FORK');assert.ok(plan.lesson);assert.equal(plan.coachNote,'Use student games first');db.close();
 });
+test('manual 400-800 placement does not force unproven lower-band skills to the front',()=>{
+  const {db,student}=setup('hmena-400-800');
+  const rec=nextLessonRecommendation(db,student.id,{locale:'en'});
+  assert.equal(rec.recommendation.skill.code,'DEV-HANGING');
+  assert.notEqual(rec.recommendation.skill.code,'FND-BOARD');db.close();
+});
+
+test('introduced prerequisites allow progression while remaining visible for later reinforcement',()=>{
+  const {db,student}=setup('hmena-0-400');
+  for(const code of ['FND-BOARD','FND-PIECES','FND-PAWNS','FND-LEGAL','FND-CHECK','FND-CBR','FND-MATE1'])setHmenaSkillStatus(db,{studentId:student.id,skillCode:code,status:'introduced',confidence:50});
+  const rec=nextLessonRecommendation(db,student.id,{locale:'en'});
+  assert.equal(rec.recommendation.skill.code,'FND-OPENING');db.close();
+});
