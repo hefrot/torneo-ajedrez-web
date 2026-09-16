@@ -89,14 +89,24 @@ function persistAnalysis(db,game,analysis){
   const openingName=analysis.openingName||game.opening_name||null,openingEco=analysis.openingEco||game.opening_eco||null;
   db.prepare(`UPDATE academic_external_games SET opening_name=?,opening_eco=?,analysis_status='analyzed',analysis_error=NULL,analysis_version=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(openingName,openingEco,analysis.analysisVersion||'academic-stockfish-v1',game.id);
   recordStudentGameReview(db,{studentId:game.student_id,sourceType:'external',sourceGameId:game.external_game_id,platform:game.platform,playedAt:game.played_at,result:game.student_result,openingName,openingEco,summary:{avgCpLoss:analysis.avgCpLoss,openingAvgCpLoss:analysis.openingAvgCpLoss,openingCriticalCount:analysis.openingCriticalCount,firstCriticalPly:analysis.firstCriticalPly,movesAnalyzed:analysis.movesAnalyzed,criticalCount:analysis.criticalCount,analysisVersion:analysis.analysisVersion}});
-  const upsert=db.prepare(`INSERT INTO student_game_findings(id,student_id,source_type,source_game_id,skill_id,finding_type,severity,engine_cp_loss,classifier_confidence,solution_margin_cp,classifier_source,ply,move_number,fen_before,move_played,best_move,note)
-    VALUES (@id,@studentId,'external',@sourceGameId,@skillId,@findingType,@severity,@cpLoss,@confidence,@solutionMarginCp,@classifierSource,@ply,@moveNumber,@fenBefore,@movePlayed,@bestMove,@note)
-    ON CONFLICT(id) DO UPDATE SET skill_id=excluded.skill_id,finding_type=excluded.finding_type,severity=excluded.severity,engine_cp_loss=excluded.engine_cp_loss,classifier_confidence=excluded.classifier_confidence,solution_margin_cp=excluded.solution_margin_cp,classifier_source=excluded.classifier_source,ply=excluded.ply,move_number=excluded.move_number,fen_before=excluded.fen_before,move_played=excluded.move_played,best_move=excluded.best_move,note=excluded.note`);
-  let findings=0;
+  const insertFinding=db.prepare(`INSERT INTO student_game_findings(id,student_id,source_type,source_game_id,skill_id,finding_type,severity,engine_cp_loss,classifier_confidence,solution_margin_cp,classifier_source,ply,move_number,fen_before,move_played,best_move,note)
+    VALUES (@id,@studentId,'external',@sourceGameId,@skillId,@findingType,@severity,@cpLoss,@confidence,@solutionMarginCp,@classifierSource,@ply,@moveNumber,@fenBefore,@movePlayed,@bestMove,@note)`);
+  const updateFinding=db.prepare(`UPDATE student_game_findings SET skill_id=@skillId,finding_type=@findingType,severity=@severity,engine_cp_loss=@cpLoss,classifier_confidence=@confidence,solution_margin_cp=@solutionMarginCp,classifier_source=@classifierSource,ply=@ply,move_number=@moveNumber,fen_before=@fenBefore,move_played=@movePlayed,best_move=@bestMove,note=@note WHERE id=@existingId`);
+  const byId=db.prepare('SELECT id FROM student_game_findings WHERE id=?');
+  const byComposite=db.prepare(`SELECT id FROM student_game_findings WHERE student_id=? AND source_type='external' AND source_game_id=? AND skill_id=? AND finding_type=? LIMIT 1`);
+  const selected=new Map();
   for(const item of analysis.critical||[]){
     const skillId=Number(item.classifierConfidence)>=0.65?skillIdByCode(db,item.suggestedSkillCode):null;
-    const id=`FIND-${stableId(`${game.id}:${item.ply}:${item.findingType}`)}`;
-    upsert.run({id,studentId:game.student_id,sourceGameId:game.external_game_id,skillId,findingType:item.findingType||'engine_mistake',severity:item.severity||1,cpLoss:item.cpLoss??null,confidence:item.classifierConfidence??null,solutionMarginCp:item.solutionMarginCp??null,classifierSource:analysis.analysisVersion||'academic-stockfish-v1',ply:item.ply??null,moveNumber:item.moveNumber??null,fenBefore:item.fenBefore||null,movePlayed:item.movePlayedUci||null,bestMove:item.bestMoveUci||null,note:item.movePlayedSan&&item.bestMoveSan?`${item.movePlayedSan} → ${item.bestMoveSan}`:null});
+    const key=skillId?`${skillId}:${item.findingType||'engine_mistake'}`:`generic:${item.ply}:${item.findingType||'engine_mistake'}`;
+    const prior=selected.get(key);if(!prior||Number(item.cpLoss||0)>Number(prior.item.cpLoss||0))selected.set(key,{item,skillId});
+  }
+  let findings=0;
+  for(const {item,skillId} of selected.values()){
+    const findingType=item.findingType||'engine_mistake';
+    const id=`FIND-${stableId(`${game.id}:${item.ply}:${findingType}`)}`;
+    const row={id,studentId:game.student_id,sourceGameId:game.external_game_id,skillId,findingType,severity:item.severity||1,cpLoss:item.cpLoss??null,confidence:item.classifierConfidence??null,solutionMarginCp:item.solutionMarginCp??null,classifierSource:analysis.analysisVersion||'academic-stockfish-v1',ply:item.ply??null,moveNumber:item.moveNumber??null,fenBefore:item.fenBefore||null,movePlayed:item.movePlayedUci||null,bestMove:item.bestMoveUci||null,note:item.movePlayedSan&&item.bestMoveSan?`${item.movePlayedSan} → ${item.bestMoveSan}`:null};
+    const existing=byId.get(id)||(skillId?byComposite.get(game.student_id,game.external_game_id,skillId,findingType):null);
+    if(existing)updateFinding.run({...row,existingId:existing.id});else insertFinding.run(row);
     if(skillId&&Number(item.cpLoss||0)>250&&['rapid','classical'].includes(String(game.time_class||'').toLowerCase())){const state=db.prepare('SELECT status,evidence_json AS evidenceJson FROM student_skills WHERE student_id=? AND skill_id=?').get(game.student_id,skillId);if(['drill_mastered','applied_in_game'].includes(state?.status)){let evidence={};try{evidence=JSON.parse(state.evidenceJson||'{}');}catch{};evidence={...evidence,regression:{gameId:game.external_game_id,cpLoss:item.cpLoss,timeClass:game.time_class,at:game.played_at||new Date().toISOString()}};db.prepare("UPDATE student_skills SET status='regressed',confidence=40,evidence_json=?,last_assessed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE student_id=? AND skill_id=?").run(JSON.stringify(evidence),game.student_id,skillId);}}
     findings++;
   }

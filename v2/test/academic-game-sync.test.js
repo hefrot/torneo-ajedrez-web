@@ -64,3 +64,15 @@ test('student-scoped sync only touches the selected student',async()=>{
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM academic_external_games WHERE student_id=?').get(ids[1]).n,0);
   db.close();
 });
+
+test('reanalysis keeps one representative skill finding per game and type',async()=>{
+  const db=openDatabase(':memory:');seedHmenaCourse0800(db);
+  db.prepare("INSERT INTO players(id,name,platform,username,registration_status) VALUES ('P4','Kid4','lichess','Kid4','academic_only')").run();
+  const student=createStudent(db,{displayName:'Kid4',playerId:'P4'});
+  db.prepare("INSERT INTO player_accounts(id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES ('A4','P4','lichess','Kid4','kid4','verified','test','4','test','2026-01-01','x')").run();
+  db.prepare("INSERT INTO academic_external_games(id,student_id,account_id,platform,external_game_id,played_at,student_color,student_result,time_class,pgn,analysis_status) VALUES ('AG4',?,'A4','lichess','g4','2026-09-15T18:00:00Z','white','loss','rapid','[Result \"*\"]\n\n*','pending')").run(student.id);
+  const analyzer=async()=>({analysisVersion:'academic-stockfish-v3',movesAnalyzed:2,avgCpLoss:500,criticalCount:2,critical:[{ply:3,moveNumber:2,fenBefore:'8/8/8/8/8/8/8/K6k w - - 0 1',movePlayedUci:'a1a2',bestMoveUci:'a1b1',cpLoss:300,severity:3,findingType:'missed_capture',suggestedSkillCode:'DEV-HANGING',classifierConfidence:.9,solutionMarginCp:300},{ply:5,moveNumber:3,fenBefore:'8/8/8/8/8/8/8/K6k w - - 0 1',movePlayedUci:'a1a2',bestMoveUci:'a1b1',cpLoss:700,severity:5,findingType:'missed_capture',suggestedSkillCode:'DEV-HANGING',classifierConfidence:.9,solutionMarginCp:700}]});
+  await analyzePendingAcademicGames(db,{analyzeGame:analyzer,studentId:student.id});
+  const rows=db.prepare("SELECT engine_cp_loss AS cpLoss FROM student_game_findings WHERE student_id=? AND finding_type='missed_capture'").all(student.id);
+  assert.equal(rows.length,1);assert.equal(rows[0].cpLoss,700);db.close();
+});
