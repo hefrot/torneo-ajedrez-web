@@ -98,3 +98,6 @@
 @media(max-width:640px){body{padding-bottom:82px}.portal-bottom-nav{position:fixed;left:12px;right:12px;bottom:max(8px,env(safe-area-inset-bottom));margin:0;max-width:none}.family-dashboard{padding-bottom:18px}}
 .portal-login-form .field{background:#0f1620!important;border:1px solid #334155!important;color:#f8fafc!important}.portal-login-form .field::placeholder{color:#7f8a9a;opacity:1}
 .training-disclaimer{display:block;color:var(--muted);margin:0 0 10px}.practice-lab{scroll-margin-bottom:90px}
+
+.diagnostic-square{position:relative;cursor:default}.diagnostic-piece{position:relative;z-index:1;font-size:1em}.diagnostic-piece.piece-white{color:#fff;text-shadow:0 1px 0 #111,1px 0 0 #111,0 -1px 0 #111,-1px 0 0 #111}.diagnostic-piece.piece-black{color:#111;text-shadow:0 1px 0 rgba(255,255,255,.22)}
+.diagnostic-square::after{content:attr(data-file-label);position:absolute;right:3px;bottom:1px;font-size:9px;font-weight:800;opacity:.62;color:#111}.diagnostic-square::before{content:attr(data-rank-label);position:absolute;left:3px;top:1px;font-size:9px;font-weight:800;opacity:.62;color:#111}.diagnostic-answer-feedback{margin-top:10px;padding:9px 11px;border-radius:10px;background:rgba(129,182,76,.12);color:var(--accent-2);font-weight:800;text-align:center}
