@@ -8,6 +8,7 @@ import {studentOpeningProfile} from './opening-trainer.js';
 import {cisBotCatalog} from './cis-bot-arena.js';
 import {familyJourney} from './family-journey.js';
 import {syncPracticeMissions} from './practice-plan.js';
+import {practiceThemeCatalog} from './practice-bank.js';
 import {studentPracticeBank} from './practice-bank.js';
 
 export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
@@ -33,6 +34,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     upcoming:upcomingStmt.all(student.id,at),
     assignments,
     practiceMissions,
+    practiceThemes:practiceThemeCatalog(db,student.id),
     practiceBank:studentPracticeBank(db,student.id,{limit:3}),
     attendance:attendanceStmt.get(student.id),
     skills,

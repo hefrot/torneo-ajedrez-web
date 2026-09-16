@@ -44,7 +44,7 @@ import {progressReportPreview,createProgressReportDraft,publishProgressReport,li
 import {createStaffAccount,loginStaffAccount,authenticateStaffSession,revokeStaffSession,listStaffAccounts,resetStaffPassword} from './staff-access.js';
 import {lessonTeachingPack,seedLessonResources} from './lesson-resources.js';
 import {submitPracticeMission,setPracticeMissionStatus} from './practice-plan.js';
-import {seedPracticeBank,recordPracticeBankAttempt,startPracticeStreak,practiceStreakState,submitPracticeStreakMove,startPracticeStorm,practiceStormState,submitPracticeStormMove} from './practice-bank.js';
+import {seedPracticeBank,recordPracticeBankAttempt,startPracticeStreak,practiceStreakState,submitPracticeStreakMove,startPracticeStorm,practiceStormState,submitPracticeStormMove,practiceThemePuzzle} from './practice-bank.js';
 
 const app=express();
 const db=openDatabase();
@@ -92,6 +92,7 @@ app.get('/api/portal/students/:id/practice-storm/:runId',portalOnly,(req,res)=>{
 app.post('/api/portal/students/:id/practice-storm/:runId/answer',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});try{res.json(submitPracticeStormMove(db,{studentId:req.params.id,runId:req.params.runId,answerMove:req.body?.answerMove}));}catch(error){res.status(400).json({error:error.message});}});
 
 
+app.get('/api/portal/students/:id/practice-themes/:theme/next',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});const puzzle=practiceThemePuzzle(db,req.params.id,req.params.theme);if(!puzzle)return res.status(404).json({error:'theme puzzle not found'});res.json({theme:req.params.theme,puzzle});});
 app.patch('/api/portal/preferences',portalOnly,(req,res)=>{try{res.json(setPortalPreferredLocale(db,req.portalAuth.accountId,req.body?.preferredLocale));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/portal/students/:id/bot-arena',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});seedCisBots(db);res.json(cisBotCatalog(db,req.params.id,{locale:req.portalAuth.preferredLocale||'en'}));});
 app.post('/api/portal/students/:id/bot-challenges',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});try{res.status(201).json(startCisBotChallenge(db,{studentId:req.params.id,botCode:req.body?.botCode}));}catch(error){res.status(400).json({error:error.message});}});

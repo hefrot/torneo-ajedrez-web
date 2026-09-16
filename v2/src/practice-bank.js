@@ -11,6 +11,7 @@ const keyThemes={
   opening:['fork','pin','hangingPiece'],themes:['deflection','discoveredAttack','pin','skewer','fork'],
   practice:['fork','hangingPiece','pin','skewer','mateIn2','endgame']
 };
+const practiceThemeCodes=['fork','pin','hangingPiece','skewer','discoveredAttack','deflection','backRankMate','mateIn2','endgame'];
 
 export function seedPracticeBank(db,{bankPath=defaultBank}={}){
   const payload=JSON.parse(readFileSync(bankPath,'utf8'));
@@ -63,6 +64,20 @@ export function studentPracticeBank(db,studentId,{limit=3}={}){
   const activeStorm=db.prepare("SELECT id,score,mistakes,expires_at AS expiresAt FROM practice_storm_runs WHERE student_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId),bestStorm=Number(db.prepare("SELECT MAX(score) AS n FROM practice_storm_runs WHERE student_id=? AND status='completed'").get(studentId)?.n||0);
   return {targetThemes:themes,targetRating:rating,profile,history:history.reverse().map(({themesJson,...row})=>row),themeStats,streakMode:{activeRunId:activeStreak?.id||null,current:Number(activeStreak?.score||0),best:bestStreakRun},stormMode:{activeRunId:activeStorm?.id||null,current:Number(activeStorm?.score||0),mistakes:Number(activeStorm?.mistakes||0),expiresAt:activeStorm?.expiresAt||null,best:bestStorm},summary:{attempts7d:Number(attempts7d?.n||0),correct7d:Number(attempts7d?.c||0)},puzzles:pool.slice(0,Math.max(1,Math.min(12,Number(limit)||3))).map(({themesJson,...row})=>row)};
 }
+export function practiceThemeCatalog(db,studentId){
+  if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))return null;
+  const recommended=new Set(targetThemes(db,studentId)),rows=db.prepare("SELECT id,themes_json AS themesJson FROM practice_bank_puzzles WHERE active=1").all();
+  const firstAttempts=db.prepare(`SELECT a.puzzle_id AS puzzleId,a.correct,p.themes_json AS themesJson FROM practice_bank_attempts a JOIN practice_bank_puzzles p ON p.id=a.puzzle_id WHERE a.student_id=? AND a.rowid=(SELECT MIN(x.rowid) FROM practice_bank_attempts x WHERE x.student_id=a.student_id AND x.puzzle_id=a.puzzle_id)`).all(studentId);
+  return practiceThemeCodes.map(theme=>{const total=rows.filter(r=>parse(r.themesJson).includes(theme)).length;const attempts=firstAttempts.filter(r=>parse(r.themesJson).includes(theme));const correct=attempts.filter(r=>r.correct).length;return {theme,total,attempts:attempts.length,correct,accuracy:attempts.length?Math.round(correct/attempts.length*100):null,recommended:recommended.has(theme)};}).filter(x=>x.total>0).sort((a,b)=>Number(b.recommended)-Number(a.recommended)||b.total-a.total);
+}
+export function practiceThemePuzzle(db,studentId,theme){
+  if(!practiceThemeCodes.includes(theme)||!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))return null;
+  const rating=studentPracticeProfile(db,studentId).rating,solved=new Set(db.prepare("SELECT DISTINCT puzzle_id AS id FROM practice_bank_attempts WHERE student_id=? AND correct=1").all(studentId).map(x=>x.id));
+  const rows=db.prepare("SELECT id,source_id AS sourceId,fen,rating,popularity,plays,themes_json AS themesJson,side_to_move AS sideToMove FROM practice_bank_puzzles WHERE active=1").all().filter(r=>parse(r.themesJson).includes(theme)&&!solved.has(r.id));
+  if(!rows.length)return null;rows.sort((a,b)=>Math.abs(Number(a.rating||rating)-rating)-Math.abs(Number(b.rating||rating)-rating)||Number(b.popularity||0)-Number(a.popularity||0)||hash(`${studentId}:${theme}:${a.id}`).localeCompare(hash(`${studentId}:${theme}:${b.id}`)));
+  return safeBankPuzzle(rows[0]);
+}
+
 export function recordPracticeBankAttempt(db,{studentId,puzzleId,answerMove}={}){
   const puzzle=db.prepare("SELECT id,best_move AS bestMove,rating FROM practice_bank_puzzles WHERE id=? AND active=1").get(puzzleId);
   if(!puzzle||!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))throw new TypeError('practice puzzle not found');

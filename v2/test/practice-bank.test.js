@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.js';
 import {createStudent} from '../src/academic.js';
-import {seedPracticeBank,studentPracticeBank,recordPracticeBankAttempt,startPracticeStreak,submitPracticeStreakMove,startPracticeStorm,practiceStormState,submitPracticeStormMove} from '../src/practice-bank.js';
+import {seedPracticeBank,studentPracticeBank,recordPracticeBankAttempt,startPracticeStreak,submitPracticeStreakMove,startPracticeStorm,practiceStormState,submitPracticeStormMove,practiceThemeCatalog,practiceThemePuzzle} from '../src/practice-bank.js';
 
 test('curated Lichess bank seeds and never exposes solutions to family payload',()=>{
   const db=openDatabase(':memory:');const seeded=seedPracticeBank(db);assert.ok(seeded.seeded>=250);
@@ -56,4 +56,15 @@ test('Puzzle Storm is server-timed, keeps going after mistakes, and never change
   const bad=submitPracticeStormMove(db,{studentId:student.id,runId:start.id,answerMove:'a1a1',now:new Date('2026-09-16T10:00:20Z')});assert.equal(bad.correct,false);assert.equal(bad.state.score,1);assert.equal(bad.state.mistakes,1);assert.equal(bad.state.status,'in_progress');
   const after=studentPracticeBank(db,student.id,{limit:1}).profile;assert.equal(after.rating,before.rating);assert.equal(after.attempts,before.attempts);
   const expired=practiceStormState(db,{studentId:student.id,runId:start.id,now:new Date('2026-09-16T10:03:01Z')});assert.equal(expired.status,'completed');assert.equal(expired.remainingSeconds,0);assert.equal(expired.score,1);assert.equal(expired.mistakes,1);db.close();
+});
+
+
+test('Puzzle Themes expose safe themed training near the student rating',()=>{
+  const db=openDatabase(':memory:');seedPracticeBank(db);const student=createStudent(db,{displayName:'Theme Kid'});
+  db.prepare("INSERT INTO assignments(id,student_id,title,details,status) VALUES ('A1',?,'CIS Practice · Forks',?,'assigned')").run(student.id,JSON.stringify({kind:'external_practice',resourceKey:'fork'}));
+  const catalog=practiceThemeCatalog(db,student.id);const fork=catalog.find(x=>x.theme==='fork');assert.ok(fork);assert.ok(fork.total>=20);assert.equal(fork.recommended,true);
+  const puzzle=practiceThemePuzzle(db,student.id,'fork');assert.ok(puzzle?.id);assert.ok(puzzle.themes.includes('fork'));assert.ok(!Object.hasOwn(puzzle,'bestMove'));
+  const solution=db.prepare('SELECT best_move AS bestMove FROM practice_bank_puzzles WHERE id=?').get(puzzle.id).bestMove;recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:solution});
+  const next=practiceThemePuzzle(db,student.id,'fork');assert.ok(next?.id);assert.notEqual(next.id,puzzle.id);const updated=practiceThemeCatalog(db,student.id).find(x=>x.theme==='fork');assert.equal(updated.attempts,1);assert.equal(updated.correct,1);assert.equal(updated.accuracy,100);
+  assert.equal(practiceThemePuzzle(db,student.id,'mateIn1'),null);db.close();
 });
