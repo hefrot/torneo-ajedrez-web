@@ -76,13 +76,14 @@ export function studentProfile(db,studentId){
   const student=db.prepare(`SELECT s.id,s.display_name AS displayName,s.status,s.age_band AS ageBand,s.school_grade AS schoolGrade,s.current_level AS currentLevel,s.target_level AS targetLevel,s.player_id AS playerId,p.username AS linkedUsername,p.platform AS linkedPlatform FROM students s LEFT JOIN players p ON p.id=s.player_id WHERE s.id=?`).get(studentId);
   if(!student)return null;
   const guardians=db.prepare(`SELECT g.id,g.name,g.email,g.phone,g.preferred_channel AS preferredChannel,sg.relationship,sg.is_primary AS isPrimary FROM student_guardians sg JOIN guardians g ON g.id=sg.guardian_id WHERE sg.student_id=? ORDER BY sg.is_primary DESC,g.name`).all(studentId);
+  const platformAccounts=student.playerId?db.prepare(`SELECT pa.id,pa.platform,pa.username,pa.verified_at AS verifiedAt,COALESCE(avs.ownership_verification,'pending') AS ownershipVerification FROM player_accounts pa LEFT JOIN account_verification_state avs ON avs.account_id=pa.id WHERE pa.player_id=? AND pa.account_status='verified' ORDER BY pa.platform,pa.username`).all(student.playerId):[];
   const enrollments=db.prepare(`SELECT e.id,e.status,e.cohort_tier AS cohortTier,e.initial_level AS initialLevel,e.current_level AS enrollmentLevel,p.id AS programId,p.name AS programName,p.program_type AS programType,p.start_date AS startDate,p.end_date AS endDate,p.planned_weeks AS plannedWeeks,s.name AS schoolName FROM enrollments e JOIN programs p ON p.id=e.program_id LEFT JOIN schools s ON s.id=p.school_id WHERE e.student_id=? ORDER BY COALESCE(p.start_date,'') DESC,p.name`).all(studentId);
   const skills=db.prepare(`SELECT ss.skill_id AS skillId,cs.code,cs.title,cs.domain,ss.status,ss.confidence,ss.last_assessed_at AS lastAssessedAt FROM student_skills ss JOIN curriculum_skills cs ON cs.id=ss.skill_id WHERE ss.student_id=? ORDER BY cs.rating_min,cs.domain,cs.title`).all(studentId);
   const assessments=db.prepare(`SELECT id,kind,overall_level AS overallLevel,score_json AS scoreJson,coach_note AS coachNote,assessed_at AS assessedAt FROM assessments WHERE student_id=? ORDER BY assessed_at DESC LIMIT 20`).all(studentId);
   const findings=db.prepare(`SELECT f.id,f.finding_type AS findingType,f.severity,f.note,f.fen_before AS fenBefore,f.move_played AS movePlayed,f.best_move AS bestMove,f.created_at AS createdAt,cs.title AS skillTitle FROM student_game_findings f LEFT JOIN curriculum_skills cs ON cs.id=f.skill_id WHERE f.student_id=? ORDER BY f.created_at DESC LIMIT 20`).all(studentId);
   const notes=db.prepare(`SELECT id,visibility,note,created_at AS createdAt FROM coach_notes WHERE student_id=? ORDER BY created_at DESC LIMIT 30`).all(studentId);
   const attendance=db.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,ROUND(AVG(comprehension_score),2) AS avgComprehension FROM attendance WHERE student_id=?`).get(studentId);
-  return {student,guardians,enrollments,skills,assessments,findings,notes,attendance};
+  return {student,guardians,platformAccounts,enrollments,skills,assessments,findings,notes,attendance};
 }
 
 export function addCoachNote(db,studentId,input={}){

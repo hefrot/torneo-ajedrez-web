@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily HMENA Chess academic rating snapshots (staging)
+
+[Timer]
+OnCalendar=*-*-* 06:10:00
+Persistent=true
+Unit=hmena-chess-academic-ratings-staging.service
+
+[Install]
+WantedBy=timers.target

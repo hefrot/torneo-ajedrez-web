@@ -55,6 +55,19 @@ const migrations=[
       CREATE INDEX IF NOT EXISTS idx_skill_mappings_target ON curriculum_skill_mappings(target_skill_id);
       CREATE INDEX IF NOT EXISTS idx_student_placements_track ON student_curriculum_placements(track_id);`);
     }
+  },
+  {
+    id:'academic-portal-access-v3',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS portal_accounts (id TEXT PRIMARY KEY,login_name TEXT NOT NULL UNIQUE COLLATE NOCASE,display_name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('guardian','student')),status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','revoked')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS portal_account_students (account_id TEXT NOT NULL REFERENCES portal_accounts(id) ON DELETE CASCADE,student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,PRIMARY KEY(account_id,student_id));
+      CREATE TABLE IF NOT EXISTS portal_access_codes (id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES portal_accounts(id) ON DELETE CASCADE,code_hash TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL,expires_at TEXT,last_used_at TEXT,revoked_at TEXT);
+      CREATE TABLE IF NOT EXISTS portal_sessions (id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES portal_accounts(id) ON DELETE CASCADE,token_hash TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL,expires_at TEXT NOT NULL,last_used_at TEXT,revoked_at TEXT);
+      CREATE TABLE IF NOT EXISTS external_rating_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT,account_id TEXT NOT NULL REFERENCES player_accounts(id) ON DELETE CASCADE,player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,platform TEXT NOT NULL CHECK(platform IN ('lichess','chesscom')),rating_type TEXT NOT NULL,rating INTEGER NOT NULL,games_count INTEGER,snapshot_date TEXT NOT NULL,captured_at TEXT NOT NULL,UNIQUE(account_id,rating_type,snapshot_date));
+      CREATE INDEX IF NOT EXISTS idx_portal_students_student ON portal_account_students(student_id);
+      CREATE INDEX IF NOT EXISTS idx_portal_sessions_account ON portal_sessions(account_id,revoked_at,expires_at);
+      CREATE INDEX IF NOT EXISTS idx_external_ratings_player_time ON external_rating_snapshots(player_id,rating_type,captured_at);`);
+    }
   }
 ];
 export function runMigrations(db){

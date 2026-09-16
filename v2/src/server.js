@@ -23,6 +23,10 @@ import {createStudent,listStudents,createSchool,listSchools,createProgram,listPr
 import {coachDashboard} from './coach-dashboard.js';
 import {listCurriculum,assignLessonToSession,recommendNextLegacyLesson} from './curriculum.js';
 import {hmenaOverview,getHmenaPlacement,placeStudentInHmena,recommendLearningPriorities,setHmenaSkillStatus} from './hmena-curriculum.js';
+import {createPortalAccount,loginPortalAccount,authenticatePortalSession,regeneratePortalCode} from './student-portal-access.js';
+import {studentPortalDashboard} from './student-portal.js';
+import {studentRatingProgress} from './rating-tracking.js';
+import {linkStudentVerifiedAccount} from './student-platform-link.js';
 
 const app=express();
 const db=openDatabase();
@@ -32,6 +36,7 @@ app.use(express.json({limit:'64kb'}));
 app.use(express.static(webRoot));
 const playerLimiter=createRateLimiter({limit:30,windowMs:60000});
 const adminLimiter=createRateLimiter({limit:60,windowMs:60000});
+const portalLimiter=createRateLimiter({limit:10,windowMs:60000});
 
 const cleanPlatform=value=>({lichess:'lichess','chess.com':'chesscom',chesscom:'chesscom'}[String(value||'').toLowerCase()]);
 const adminOnly=(req,res,next)=>{
@@ -40,9 +45,17 @@ const adminOnly=(req,res,next)=>{
   next();
 };
 const playerOnly=(req,res,next)=>{const header=String(req.get('authorization')||'');const token=header.startsWith('Bearer ')?header.slice(7):'';const auth=authenticatePlayerToken(db,token);if(!auth)return res.status(401).json({error:'player access token required'});const gate=playerLimiter.consume(auth.playerId);if(!gate.allowed){res.set('Retry-After',String(gate.retryAfterSeconds));return res.status(429).json({error:'rate limit exceeded'});}req.playerAuth=auth;next();};
+const portalOnly=(req,res,next)=>{const header=String(req.get('authorization')||'');const token=header.startsWith('Bearer ')?header.slice(7):'';const auth=authenticatePortalSession(db,token);if(!auth)return res.status(401).json({error:'portal session required'});req.portalAuth=auth;next();};
 const readiness=()=>buildSeasonReadiness(listPublicPlayers(db));
 
 app.get('/api/health',(_q,res)=>res.json({ok:true,service:'hmena-chess-v2'}));
+app.post('/api/portal/login',(req,res)=>{
+  const gate=portalLimiter.consume(req.ip||'portal');if(!gate.allowed){res.set('Retry-After',String(gate.retryAfterSeconds));return res.status(429).json({error:'rate limit exceeded'});}
+  const result=loginPortalAccount(db,{loginName:req.body?.loginName,accessCode:req.body?.accessCode});
+  if(!result)return res.status(401).json({error:'usuario o código incorrecto'});
+  res.json(result);
+});
+app.get('/api/portal/me',portalOnly,(req,res)=>{const data=studentPortalDashboard(db,req.portalAuth.accountId);if(!data)return res.status(404).json({error:'portal account not found'});res.json(data);});
 app.get('/api/config',(_q,res)=>{
   const control=getSeasonControl(db);
   const rules=leagueRuleMap(db);res.json({seasonName:process.env.SEASON_NAME||'HMENA Chess League 2026',gamesPerOpponent:rules.games_per_opponent,scoring:rules.scoring,minActivityHours:24,playAhead:true,automatic24hForfeit:false,registrationRequiresVerifiedPlatformAccount:true,ownershipPolicy:rules.ownership_requirement,registrationOpen:control.registration_state==='OPEN',registrationState:control.registration_state,seasonStatus:control.season_status});
@@ -106,6 +119,10 @@ app.get('/api/admin/students/:id/learning-priorities',adminOnly,(req,res)=>res.j
 app.put('/api/admin/students/:id/placement',adminOnly,(req,res)=>{try{res.json(placeStudentInHmena(db,{studentId:req.params.id,bandCode:req.body?.bandCode,source:req.body?.source||'manual',confidence:req.body?.confidence??80,note:req.body?.note||null}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/students/:id/hmena-skills/:code',adminOnly,(req,res)=>{try{res.json(setHmenaSkillStatus(db,{studentId:req.params.id,skillCode:req.params.code,status:req.body?.status,confidence:req.body?.confidence??null,evidence:req.body?.evidence||{}}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/sessions/:id/lessons',adminOnly,(req,res)=>{try{res.status(201).json(assignLessonToSession(db,{sessionId:req.params.id,lessonId:req.body?.lessonId,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/admin/students/:id/portal-access',adminOnly,(req,res)=>{try{const student=db.prepare('SELECT display_name AS displayName FROM students WHERE id=?').get(req.params.id);if(!student)return res.status(404).json({error:'student not found'});const role=req.body?.role||'guardian';const displayName=req.body?.displayName||`${role==='guardian'?'Familia de ':''}${student.displayName}`;res.status(201).json(createPortalAccount(db,{studentIds:[req.params.id],role,displayName,loginName:req.body?.loginName||null}));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/admin/portal/accounts/:id/regenerate-code',adminOnly,(req,res)=>{try{res.json(regeneratePortalCode(db,req.params.id));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/admin/students/:id/platform-accounts/verify',adminOnly,async(req,res,next)=>{try{const platform=cleanPlatform(req.body?.platform),username=String(req.body?.username||'').trim();if(!platform||!username)return res.status(400).json({error:'platform and username are required'});const verification=await verifyPlatformAccount(platform,username);const linked=linkStudentVerifiedAccount(db,req.params.id,verification);recordProfileVerification(db,linked.playerId,verification);res.status(201).json(linked);}catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
+app.get('/api/admin/students/:id/rating-progress',adminOnly,(req,res)=>{const data=studentRatingProgress(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
 app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/schools',adminOnly,(_q,res)=>res.json(listSchools(db)));

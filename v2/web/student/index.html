@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Mi progreso · HMENA Chess</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <div class="preview-ribbon">STUDENT PORTAL · STAGING</div>
+  <div class="shell student-shell">
+    <nav class="topbar"><a class="brand" href="../"><span class="brand-mark">♞</span><span>HMENA Chess<small>MI PROGRESO</small></span></a><button id="logout" class="btn btn-secondary" hidden>Cerrar sesión</button></nav>
+    <section id="login-panel" class="portal-login panel">
+      <span class="eyebrow">Acceso privado</span><h1>Mi progreso</h1><p>Ingresa el usuario y código que te dio tu coach.</p>
+      <form id="login-form" class="portal-login-form">
+        <label>Usuario<input class="field" name="loginName" autocomplete="username" required></label>
+        <label>Código<input class="field" name="accessCode" type="password" autocomplete="current-password" required></label>
+        <button class="btn btn-primary" type="submit">Entrar</button>
+      </form>
+    </section>
+    <section id="portal" hidden><header class="coach-hero"><div><span class="eyebrow">HMENA Chess 0–2500</span><h1 id="welcome">Mi progreso</h1><p>Clases, habilidades y ratings en un solo lugar.</p></div></header><div id="students" class="coach-stack"></div></section>
+    <p id="portal-error" class="form-message"></p>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
