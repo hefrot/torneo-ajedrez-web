@@ -27,6 +27,7 @@ test('three correct puzzle attempts mark the puzzle mastered',()=>{
   const db=openDatabase(':memory:');seedHmenaFramework(db);seedHmenaCourse0800(db);
   const student=createStudent(db,{displayName:'Puzzle Student'});finding(db,'P1',student.id,'DEV-FORK',4);
   const intel=studentTrainingIntelligence(db,student.id,{locale:'en'});const puzzle=intel.puzzles[0];
+  assert.equal(Object.hasOwn(puzzle,'bestMove'),false);
   recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1'});
   recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1'});
   const third=recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1'});

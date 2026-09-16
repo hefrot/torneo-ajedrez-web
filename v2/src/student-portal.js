@@ -2,6 +2,7 @@ import {getHmenaPlacement} from './hmena-curriculum.js';
 import {normalizeLocale,localizedLearningPriorities,localizeSkillRows} from './curriculum-localization.js';
 import {studentRatingProgress} from './rating-tracking.js';
 import {studentTrainingIntelligence} from './training-intelligence.js';
+import {studentOpeningProfile} from './opening-trainer.js';
 
 export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
   const account=db.prepare("SELECT id,login_name AS loginName,display_name AS displayName,role,preferred_locale AS preferredLocale FROM portal_accounts WHERE id=? AND status='active'").get(accountId);
@@ -19,6 +20,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     priorities:learning.priorities,
     ratings:studentRatingProgress(db,student.id),
     training:studentTrainingIntelligence(db,student.id,{locale}),
+    openingTrainer:studentOpeningProfile(db,student.id,{locale}),
     upcoming:upcomingStmt.all(student.id,at),
     assignments:assignmentStmt.all(student.id),
     attendance:attendanceStmt.get(student.id),

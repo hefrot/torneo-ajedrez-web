@@ -83,7 +83,8 @@ def analyze(payload):
     think = max(0.02, min(0.25, float(payload.get("thinkSeconds") or 0.06)))
     board = game.board()
     node = game
-    critical, losses = [], []
+    critical, losses, opening_losses = [], [], []
+    opening_critical = 0
     student_moves = 0
     engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
     try:
@@ -105,7 +106,9 @@ def analyze(payload):
                 played_cp = cp(after_info["score"], mover)
                 loss = max(0, best_cp - played_cp)
                 losses.append(loss); student_moves += 1
+                if ply < 20: opening_losses.append(loss)
                 if loss >= 100:
+                    if ply < 20: opening_critical += 1
                     kind, skill, confidence = classify(board, best_move, move, loss, ply)
                     critical.append({"ply":ply+1,"moveNumber":board.fullmove_number,"fenBefore":before_fen,"movePlayedUci":move.uci(),"movePlayedSan":san,"bestMoveUci":best_move.uci(),"bestMoveSan":best_san,"cpLoss":loss,"severity":severity(loss),"findingType":kind,"suggestedSkillCode":skill,"classifierConfidence":confidence})
             board.push(move)
@@ -113,6 +116,7 @@ def analyze(payload):
     finally:
         engine.quit()
     avg_loss = round(sum(losses)/len(losses),1) if losses else 0.0
+    opening_avg = round(sum(opening_losses)/len(opening_losses),1) if opening_losses else 0.0
     return {
         "analysisVersion": ANALYSIS_VERSION,
         "engine": "Stockfish",
@@ -121,6 +125,9 @@ def analyze(payload):
         "openingName": opening or payload.get("openingName"),
         "movesAnalyzed": student_moves,
         "avgCpLoss": avg_loss,
+        "openingAvgCpLoss": opening_avg,
+        "openingCriticalCount": opening_critical,
+        "firstCriticalPly": critical[0]["ply"] if critical else None,
         "criticalCount": len(critical),
         "critical": critical[:20],
     }

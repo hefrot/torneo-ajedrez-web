@@ -31,6 +31,7 @@ import {linkStudentVerifiedAccount} from './student-platform-link.js';
 import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from './training-intelligence.js';
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
 import {course0800Overview} from './hmena-course.js';
+import {studentOpeningProfile} from './opening-trainer.js';
 
 const app=express();
 const db=openDatabase();
@@ -135,6 +136,7 @@ app.post('/api/admin/portal/accounts/:id/regenerate-code',adminOnly,(req,res)=>{
 app.post('/api/admin/students/:id/platform-accounts/verify',adminOnly,async(req,res,next)=>{try{const platform=cleanPlatform(req.body?.platform),username=String(req.body?.username||'').trim();if(!platform||!username)return res.status(400).json({error:'platform and username are required'});const verification=await verifyPlatformAccount(platform,username);const linked=linkStudentVerifiedAccount(db,req.params.id,verification);recordProfileVerification(db,linked.playerId,verification);res.status(201).json(linked);}catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
 app.get('/api/admin/students/:id/rating-progress',adminOnly,(req,res)=>{const data=studentRatingProgress(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students/:id/training-intelligence',adminOnly,(req,res)=>{const data=studentTrainingIntelligence(db,req.params.id,{locale:req.query?.locale||'en',includeTechnical:true});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
+app.get('/api/admin/students/:id/opening-trainer',adminOnly,(req,res)=>{const data=studentOpeningProfile(db,req.params.id,{locale:req.query?.locale||'en'});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.post('/api/admin/students/:id/game-reviews',adminOnly,(req,res)=>{try{res.status(201).json(recordStudentGameReview(db,{studentId:req.params.id,...req.body}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
 app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
