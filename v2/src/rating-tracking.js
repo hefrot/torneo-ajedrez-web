@@ -5,7 +5,7 @@ export function lichessRatings(profile){
   const keys=['rapid','blitz','bullet','classical','correspondence'];
   return keys.flatMap(type=>{
     const perf=profile?.perfs?.[type];
-    return Number.isFinite(perf?.rating)?[{ratingType:type,rating:perf.rating,gamesCount:Number(perf.games)||null}]:[];
+    return Number.isFinite(perf?.rating)?[{ratingType:type,rating:perf.rating,gamesCount:Number(perf.games)||null,ratingDeviation:Number.isFinite(perf?.rd)?Number(perf.rd):null,provisional:perf?.prov===true?true:perf?.prov===false?false:null}]:[];
   });
 }
 
@@ -14,15 +14,15 @@ export function chessComRatings(stats){
   return keys.flatMap(type=>{
     const item=stats?.[type];
     const rating=item?.last?.rating;
-    return Number.isFinite(rating)?[{ratingType:type.replace('chess_',''),rating,gamesCount:sumRecord(item?.record)||null}]:[];
+    return Number.isFinite(rating)?[{ratingType:type.replace('chess_',''),rating,gamesCount:sumRecord(item?.record)||null,ratingDeviation:null,provisional:null}]:[];
   });
 }
 
 export function saveDailyRatings(db,account,ratings,{now=new Date()}={}){
   const day=pacificDate(now),capturedAt=now.toISOString();
-  const upsert=db.prepare(`INSERT INTO external_rating_snapshots(account_id,player_id,platform,rating_type,rating,games_count,snapshot_date,captured_at)
-    VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(account_id,rating_type,snapshot_date) DO UPDATE SET rating=excluded.rating,games_count=excluded.games_count,captured_at=excluded.captured_at`);
-  let saved=0; for(const row of ratings){upsert.run(account.accountId,account.playerId,account.platform,row.ratingType,row.rating,row.gamesCount??null,day,capturedAt);saved+=1;}
+  const upsert=db.prepare(`INSERT INTO external_rating_snapshots(account_id,player_id,platform,rating_type,rating,games_count,rating_deviation,provisional,snapshot_date,captured_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,rating_type,snapshot_date) DO UPDATE SET rating=excluded.rating,games_count=excluded.games_count,rating_deviation=excluded.rating_deviation,provisional=excluded.provisional,captured_at=excluded.captured_at`);
+  let saved=0; for(const row of ratings){upsert.run(account.accountId,account.playerId,account.platform,row.ratingType,row.rating,row.gamesCount??null,row.ratingDeviation??null,row.provisional==null?null:(row.provisional?1:0),day,capturedAt);saved+=1;}
   return saved;
 }
 
@@ -63,7 +63,7 @@ export function studentRatingProgress(db,studentId){
   if(!student)return null;
   if(!student.playerId)return {studentId,accounts:[],series:[]};
   const accounts=db.prepare(`SELECT id,platform,username FROM player_accounts WHERE player_id=? AND account_status='verified' ORDER BY platform,username`).all(student.playerId);
-  const rows=db.prepare(`SELECT ers.account_id AS accountId,ers.platform,pa.username,ers.rating_type AS ratingType,ers.rating,ers.games_count AS gamesCount,ers.snapshot_date AS snapshotDate,ers.captured_at AS capturedAt
+  const rows=db.prepare(`SELECT ers.account_id AS accountId,ers.platform,pa.username,ers.rating_type AS ratingType,ers.rating,ers.games_count AS gamesCount,ers.rating_deviation AS ratingDeviation,ers.provisional,ers.snapshot_date AS snapshotDate,ers.captured_at AS capturedAt
     FROM external_rating_snapshots ers JOIN player_accounts pa ON pa.id=ers.account_id
     WHERE ers.player_id=? ORDER BY ers.platform,pa.username,ers.rating_type,ers.snapshot_date`).all(student.playerId);
   const groups=new Map();

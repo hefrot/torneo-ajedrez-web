@@ -67,3 +67,34 @@ test('coach can approve and explicitly assign the plan to the next private sessi
   assert.equal(decision.assignment.assigned,true);assert.equal(decision.assignment.id,'SES-NEXT');
   const planned=db.prepare("SELECT lesson_id AS lessonId FROM session_lessons WHERE session_id='SES-NEXT'").get();assert.equal(planned.lessonId,decision.selected.lesson.id);db.close();
 });
+
+function addModeFinding(db,student,code,{id,timeClass='rapid',playedAt='2026-09-15T18:00:00Z',severity=4}={}){
+  const pid=`P-${student.id}`,aid=`A-${student.id}`;
+  db.prepare("INSERT OR IGNORE INTO players(id,name,platform,username,registration_status) VALUES (?,?,?,?, 'academic_only')").run(pid,student.displayName,'lichess',`u-${student.id}`);
+  db.prepare("INSERT OR IGNORE INTO player_accounts(id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?,?,?,?,'verified','test',?,'test','2026-01-01T00:00:00Z','x')").run(aid,pid,'lichess',`u-${student.id}`,`u-${student.id}`,`src-${student.id}`);
+  db.prepare('UPDATE students SET player_id=? WHERE id=?').run(pid,student.id);
+  const gid=id||`GM-${code}-${timeClass}-${Math.random()}`,skill=db.prepare('SELECT id FROM curriculum_skills WHERE code=?').get(code);
+  db.prepare("INSERT INTO academic_external_games(id,student_id,account_id,platform,external_game_id,played_at,student_color,student_result,time_class,analysis_status) VALUES (?,?,?,?,?,?, 'white','loss',?,'analyzed')").run(`AG-${gid}`,student.id,aid,'lichess',gid,playedAt,timeClass);
+  db.prepare("INSERT INTO student_game_findings(id,student_id,source_type,source_game_id,skill_id,finding_type,severity,created_at) VALUES (?,?, 'external',?,?, 'missed_tactic',?,?)").run(`F-${gid}`,student.id,gid,skill.id,severity,playedAt);
+}
+
+test('Bullet volume cannot outweigh a recent Rapid weakness',()=>{
+  const {db,student}=setup();for(const code of ['FND-BOARD','FND-PIECES','FND-PAWNS','FND-LEGAL','FND-THINK','DEV-HANGING','DEV-THREATS'])master(db,student,code);
+  setHmenaSkillStatus(db,{studentId:student.id,skillCode:'DEV-FORK',status:'practicing'});setHmenaSkillStatus(db,{studentId:student.id,skillCode:'DEV-PIN',status:'practicing'});
+  for(let i=0;i<12;i++)addModeFinding(db,student,'DEV-FORK',{id:`bullet-${i}`,timeClass:'bullet',playedAt:'2026-09-15T17:00:00Z'});
+  addModeFinding(db,student,'DEV-PIN',{id:'rapid-one',timeClass:'rapid',playedAt:'2026-09-15T18:00:00Z'});
+  const rec=nextLessonRecommendation(db,student.id,{locale:'en',now:new Date('2026-09-15T20:00:00Z')});assert.equal(rec.recommendation.skill.code,'DEV-PIN');db.close();
+});
+
+test('old game mistakes decay below recent evidence',()=>{
+  const {db,student}=setup();for(const code of ['FND-BOARD','FND-PIECES','FND-PAWNS','FND-LEGAL','FND-THINK','DEV-HANGING','DEV-THREATS'])master(db,student,code);
+  setHmenaSkillStatus(db,{studentId:student.id,skillCode:'DEV-FORK',status:'practicing'});setHmenaSkillStatus(db,{studentId:student.id,skillCode:'DEV-PIN',status:'practicing'});
+  for(let i=0;i<3;i++)addModeFinding(db,student,'DEV-FORK',{id:`old-${i}`,timeClass:'rapid',playedAt:'2026-06-15T18:00:00Z',severity:5});
+  addModeFinding(db,student,'DEV-PIN',{id:'new-one',timeClass:'rapid',playedAt:'2026-09-15T18:00:00Z',severity:4});
+  const rec=nextLessonRecommendation(db,student.id,{locale:'en',now:new Date('2026-09-15T20:00:00Z')});assert.equal(rec.recommendation.skill.code,'DEV-PIN');db.close();
+});
+
+test('two repeated coach selections rotate the next recommendation toward a parallel branch',()=>{
+  const {db,student}=setup();recordCoachLessonDecision(db,{studentId:student.id,decision:'accepted',locale:'en'});recordCoachLessonDecision(db,{studentId:student.id,decision:'accepted',locale:'en'});
+  const rec=nextLessonRecommendation(db,student.id,{locale:'en'});assert.notEqual(rec.recommendation.skill.code,'DEV-HANGING');assert.ok(rec.recommendation.reasons.some(r=>r.code==='parallel'));db.close();
+});

@@ -36,6 +36,14 @@ function puzzleBoard(p,studentId){
   const squares=[];for(const rank of ranks)for(const file of files){const sq=file+rank,piece=map.get(sq)||'',fi=file.charCodeAt(0)-97,light=(fi+rank)%2===1;squares.push(`<button type="button" class="puzzle-square ${light?'light':'dark'}" data-square="${sq}" data-piece="${piece}">${chessPieces[piece]||''}</button>`);}
   return `<article class="mistake-puzzle" data-student-id="${esc(studentId)}" data-puzzle-id="${esc(p.id)}" data-turn="${esc(turn)}"><div class="puzzle-meta"><strong>${esc(p.skillTitle||t('mistakePuzzles'))}</strong><small>${t('puzzleInstruction')}</small></div><div class="puzzle-board">${squares.join('')}</div><small class="puzzle-help">${t('selectMove')}</small><div class="puzzle-result" aria-live="polite"></div></article>`;
 }
+
+function diagnosticBoard(fen){
+  if(!fen)return '';
+  const {map,turn}=fenSquares(fen),files=turn==='b'?['h','g','f','e','d','c','b','a']:['a','b','c','d','e','f','g','h'],ranks=turn==='b'?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1];
+  const squares=[];for(const rank of ranks)for(const file of files){const sq=file+rank,piece=map.get(sq)||'',fi=file.charCodeAt(0)-97,light=(fi+rank)%2===1;squares.push(`<span class="puzzle-square diagnostic-square ${light?'light':'dark'}">${chessPieces[piece]||''}</span>`);}
+  return `<div class="puzzle-board diagnostic-board" aria-label="Chess position">${squares.join('')}</div>`;
+}
+
 function openingTrainerBlock(profile){
   if(!profile?.gamesAnalyzed)return `<div class="empty">${t('noOpeningData')}</div>`;
   const rows=profile.openings?.slice(0,5).map(o=>`<li><strong>${esc(o.openingName)}</strong>${o.openingEco?` · ${esc(o.openingEco)}`:''}<br><small>${o.games} ${t('openingGames')} · ${o.wins}W/${o.losses}L/${o.draws}D · ${t('openingCpl')}: ${o.openingAvgCpLoss??'—'} · ${t('openingErrors')}: ${o.criticalOpeningErrors}</small></li>`).join('')||'';
@@ -71,10 +79,10 @@ function renderDiagnostic(state){
     return;
   }
   const q=state.item;if(!q){$('#diagnostic-body').innerHTML='<div class="empty">—</div>';return;}
-  const stageLabel=q.stage==='foundations'?t('foundations'):t('development');
+  const stageLabel=q.isAnchor?(locale==='es'?'Chequeo esencial':'Anchor check'):(q.stage==='foundations'?t('foundations'):t('development'));
   const options=q.options.map((option,index)=>{const key=String.fromCharCode(65+index);return `<label class="diagnostic-option"><input type="radio" name="diagnostic-answer" value="${key}"><span><strong>${key}.</strong> ${esc(option)}</span></label>`}).join('');
   const seedNote=state.entryBasis==='rating_seed'?`<div class="next-lesson-box"><small>${t('foundationSkipped')}</small><p>${t('ratingSeed')}</p></div>`:'';
-  $('#diagnostic-body').innerHTML=`${seedNote}<div class="diagnostic-progress"><span>${stageLabel}</span><strong>${t('question')} ${q.sequence}</strong></div><h2 class="diagnostic-prompt">${esc(q.prompt)}</h2><form id="diagnostic-form" data-item-id="${esc(q.id)}">${options}<button class="btn btn-primary" type="submit">${t('answer')}</button></form>`;
+  $('#diagnostic-body').innerHTML=`${seedNote}<div class="diagnostic-progress"><span>${stageLabel}</span><strong>${q.isAnchor?'':`${t('question')} ${q.sequence}`}</strong></div>${diagnosticBoard(q.fen)}<h2 class="diagnostic-prompt">${esc(q.prompt)}</h2><form id="diagnostic-form" data-item-id="${esc(q.id)}">${options}<button class="btn btn-primary" type="submit">${t('answer')}</button></form>`;
 }
 async function openDiagnostic(studentId){
   const start=await api(`../api/portal/students/${encodeURIComponent(studentId)}/diagnostic/start`,{method:'POST',body:JSON.stringify({locale})});activeDiagnosticId=start.attemptId;

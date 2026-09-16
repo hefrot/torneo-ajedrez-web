@@ -208,6 +208,24 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'academic-review2-safety-v13',
+    run(db){
+      if(!hasColumn(db,'external_rating_snapshots','rating_deviation')) db.exec('ALTER TABLE external_rating_snapshots ADD COLUMN rating_deviation REAL');
+      if(!hasColumn(db,'external_rating_snapshots','provisional')) db.exec('ALTER TABLE external_rating_snapshots ADD COLUMN provisional INTEGER CHECK(provisional IN (0,1))');
+      if(!hasColumn(db,'student_game_findings','solution_margin_cp')) db.exec('ALTER TABLE student_game_findings ADD COLUMN solution_margin_cp INTEGER');
+      if(!hasColumn(db,'training_puzzles','solution_margin_cp')) db.exec('ALTER TABLE training_puzzles ADD COLUMN solution_margin_cp INTEGER');
+      if(!hasColumn(db,'diagnostic_items','is_anchor')) db.exec('ALTER TABLE diagnostic_items ADD COLUMN is_anchor INTEGER NOT NULL DEFAULT 0 CHECK(is_anchor IN (0,1))');
+      if(!hasColumn(db,'diagnostic_items','fen')) db.exec('ALTER TABLE diagnostic_items ADD COLUMN fen TEXT');
+      db.exec(`DROP VIEW IF EXISTS v_public_league_accounts;
+      CREATE VIEW v_public_league_accounts AS
+      SELECT p.id,p.name,p.registration_status,p.availability,p.last_activity_at,a.platform,a.username,a.verified_at,a.verification_source
+      FROM players p JOIN player_accounts a ON a.player_id=p.id
+      WHERE p.registration_status='registered' AND a.account_status='verified' AND a.verified_at IS NOT NULL;`);
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

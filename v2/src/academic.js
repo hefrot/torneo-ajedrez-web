@@ -55,6 +55,16 @@ export function enrollStudent(db,{programId,studentId,initialLevel=null}={}){
 const attendanceStatuses=new Set(['present','absent','late','excused']);
 const engagementFlags=new Set(['focused','distracted','disruptive']);
 
+
+function applySessionSkillEvidence(db,{sessionId,programId,studentId,status,comprehensionScore}){
+  if(!['present','late'].includes(status))return;
+  const tier=db.prepare('SELECT cohort_tier AS cohortTier FROM enrollments WHERE program_id=? AND student_id=?').get(programId,studentId)?.cohortTier||null;
+  const skills=db.prepare(`SELECT DISTINCT ls.skill_id AS skillId FROM session_lessons sl JOIN lesson_skills ls ON ls.lesson_id=sl.lesson_id WHERE sl.session_id=? AND (sl.cohort_tier IS NULL OR sl.cohort_tier=?)`).all(sessionId,tier);
+  const get=db.prepare('SELECT status,confidence,evidence_json AS evidenceJson FROM student_skills WHERE student_id=? AND skill_id=?');
+  const upsert=db.prepare(`INSERT INTO student_skills(student_id,skill_id,status,confidence,evidence_json,last_assessed_at,updated_at) VALUES (?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(student_id,skill_id) DO UPDATE SET status=excluded.status,confidence=excluded.confidence,evidence_json=excluded.evidence_json,last_assessed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`);
+  for(const row of skills){const current=get.get(studentId,row.skillId);if(['drill_mastered','applied_in_game','regressed'].includes(current?.status))continue;const next=Number(comprehensionScore)>=3?'practicing':'introduced';let evidence={};try{evidence=JSON.parse(current?.evidenceJson||'{}');}catch{};evidence={...evidence,classroom:{sessionId,status,comprehensionScore:comprehensionScore??null,updatedAt:new Date().toISOString()}};upsert.run(studentId,row.skillId,next,next==='practicing'?65:45,JSON.stringify(evidence));}
+}
+
 export function saveSessionAttendance(db,sessionId,records=[]){
   const session=db.prepare('SELECT id,program_id FROM class_sessions WHERE id=?').get(sessionId);
   if(!session)throw new TypeError('session not found');
@@ -72,6 +82,7 @@ export function saveSessionAttendance(db,sessionId,records=[]){
     const engagementFlag=raw?.engagementFlag?text(raw.engagementFlag).toLowerCase():null;
     if(engagementFlag&&!engagementFlags.has(engagementFlag))throw new TypeError('invalid engagementFlag');
     upsert.run({sessionId,studentId,status,comprehensionScore,engagementFlag,note:text(raw?.note)||null});
+    applySessionSkillEvidence(db,{sessionId,programId:session.program_id,studentId,status,comprehensionScore});
   }})();
   return db.prepare(`SELECT a.student_id AS studentId,s.display_name AS displayName,a.status,a.comprehension_score AS comprehensionScore,a.engagement_flag AS engagementFlag,a.note FROM attendance a JOIN students s ON s.id=a.student_id WHERE a.session_id=? ORDER BY s.display_name`).all(sessionId);
 }

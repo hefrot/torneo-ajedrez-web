@@ -22,13 +22,32 @@ function aggregateRecommendations(db,students,locale){
   const suggestions=[...groups.values()].map(g=>({...g,studentCount:g.students.length,avgScore:g.students.length?Number((g.scoreSum/g.students.length).toFixed(1)):0,avgConfidence:g.students.length?Math.round(g.confidenceSum/g.students.length):0,coverage:students.length?Number((g.students.length/students.length).toFixed(2)):0})).sort((a,b)=>b.studentCount-a.studentCount||b.avgScore-a.avgScore);
   return {suggestions,diagnostics,eligible};
 }
+
+const themeForSkill=code=>{
+  const c=String(code||'');
+  if(/MATE|BACKRANK|LADDER|QK/.test(c))return 'checkmate';
+  if(/OPEN|TRAP/.test(c))return 'openings';
+  if(/KP-END|END|OPPOSITION/.test(c))return 'endgames';
+  if(/FORK|PIN|SKEWER|DISCOVERED|CCT|REMOVE|DEFLECTION|OVERLOAD/.test(c))return 'tactics';
+  if(/HANGING|MATERIAL|THREATS|THINK|LEGAL/.test(c))return 'safety';
+  return 'general';
+};
+const themeLabels={en:{checkmate:'Checkmate patterns',openings:'Opening habits',endgames:'Endgame technique',tactics:'Tactical vision',safety:'Board safety & decision making',general:'Chess fundamentals'},es:{checkmate:'Patrones de mate',openings:'Hábitos de apertura',endgames:'Técnica de finales',tactics:'Visión táctica',safety:'Seguridad y toma de decisiones',general:'Fundamentos de ajedrez'}};
+function chooseUnifiedTheme(suggestions,locale){
+  const map=new Map(),total=Math.max(1,suggestions.reduce((n,s)=>n+Number(s.studentCount||0),0));
+  for(const s of suggestions){const theme=themeForSkill(s.skill?.code),n=Number(s.studentCount||0);map.set(theme,(map.get(theme)||0)+n);}
+  const [theme,count]=[...map.entries()].sort((a,b)=>b[1]-a[1])[0]||['general',0];
+  return {theme,label:themeLabels[locale]?.[theme]||theme,studentCount:count,coverage:Number((count/total).toFixed(2)),aligned:count/total>=.5};
+}
+
 export function programLessonRecommendation(db,programId,{locale='en'}={}){
   const lang=normalizeLocale(locale);const program=db.prepare(`SELECT p.id,p.name,p.program_type AS programType,p.instruction_locale AS instructionLocale,s.name AS schoolName FROM programs p LEFT JOIN schools s ON s.id=p.school_id WHERE p.id=?`).get(programId);if(!program)return null;
   const students=roster(db,programId);const overall=aggregateRecommendations(db,students,lang);
   const tiers=[...new Set(students.map(s=>s.cohortTier).filter(Boolean))];
-  const byTier=tiers.map(tier=>{const rows=students.filter(s=>s.cohortTier===tier),agg=aggregateRecommendations(db,rows,lang);return {cohortTier:tier,rosterCount:rows.length,suggestion:agg.suggestions[0]||null,alternatives:agg.suggestions.slice(1,3),diagnosticsNeeded:agg.diagnostics,eligible:agg.eligible,suggestions:agg.suggestions};});
-  const top=overall.suggestions[0]||null,second=overall.suggestions[1]||null;
-  return {program,locale:lang,rosterCount:students.length,nextSession:nextSession(db,programId),diagnosticsNeeded:overall.diagnostics,suggestion:top,alternatives:overall.suggestions.slice(1,4),differentiated:Boolean(byTier.length>1||(top&&top.coverage<0.5&&second)),byTier};
+  const theme=chooseUnifiedTheme(overall.suggestions,lang);
+  const byTier=tiers.map(tier=>{const rows=students.filter(s=>s.cohortTier===tier),agg=aggregateRecommendations(db,rows,lang);const aligned=agg.suggestions.find(x=>themeForSkill(x.skill?.code)===theme.theme)||null;const suggestion=aligned||agg.suggestions[0]||null;return {cohortTier:tier,rosterCount:rows.length,suggestion,themeAligned:Boolean(aligned),alternatives:agg.suggestions.filter(x=>x!==suggestion).slice(0,3),diagnosticsNeeded:agg.diagnostics,eligible:agg.eligible,suggestions:agg.suggestions};});
+  const top=overall.suggestions.find(x=>themeForSkill(x.skill?.code)===theme.theme)||overall.suggestions[0]||null,second=overall.suggestions[1]||null;
+  return {program,locale:lang,rosterCount:students.length,nextSession:nextSession(db,programId),diagnosticsNeeded:overall.diagnostics,provisionalSeeds:students.filter(s=>!s.cohortTier).length,unifiedTheme:theme,teachingMode:theme.aligned?'unified_theme':'coach_choice',suggestion:top,alternatives:overall.suggestions.slice(1,4),differentiated:Boolean(byTier.length>1||(top&&top.coverage<0.5&&second)),byTier};
 }
 
 export function assignProgramLesson(db,{programId,lessonId,sessionId=null,cohortTier=null,deliveryStage='theory_only'}={}){

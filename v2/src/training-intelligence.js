@@ -21,13 +21,15 @@ export function recordStudentGameReview(db,input={}){
   return {studentId,sourceType,sourceGameId};
 }
 export function createFindingPuzzle(db,findingId){
-  const f=db.prepare(`SELECT id,student_id AS studentId,skill_id AS skillId,fen_before AS fen,move_played AS movePlayed,best_move AS bestMove FROM student_game_findings WHERE id=?`).get(findingId);
+  const f=db.prepare(`SELECT id,student_id AS studentId,skill_id AS skillId,fen_before AS fen,move_played AS movePlayed,best_move AS bestMove,solution_margin_cp AS solutionMarginCp,classifier_source AS classifierSource FROM student_game_findings WHERE id=?`).get(findingId);
   if(!f)throw new TypeError('finding not found');
   if(!f.fen||!f.bestMove)return null;
+  const automatic=String(f.classifierSource||'').startsWith('academic-stockfish');
+  if(automatic&&Number(f.solutionMarginCp||0)<200)return null;
   const existing=db.prepare('SELECT id FROM training_puzzles WHERE finding_id=?').get(findingId);
   if(existing)return {id:existing.id,created:false};
   const id=`TPZ-${randomUUID()}`;
-  db.prepare(`INSERT INTO training_puzzles(id,student_id,finding_id,skill_id,fen,move_played,best_move) VALUES (?,?,?,?,?,?,?)`).run(id,f.studentId,findingId,f.skillId,f.fen,f.movePlayed||null,f.bestMove);
+  db.prepare(`INSERT INTO training_puzzles(id,student_id,finding_id,skill_id,fen,move_played,best_move,solution_margin_cp) VALUES (?,?,?,?,?,?,?,?)`).run(id,f.studentId,findingId,f.skillId,f.fen,f.movePlayed||null,f.bestMove,f.solutionMarginCp??null);
   return {id,created:true};
 }
 
@@ -37,16 +39,19 @@ export function createPuzzlesFromFindings(db,studentId){
   return {studentId,eligible:rows.length,created};
 }
 
-export function recordPuzzleAttempt(db,{studentId,puzzleId,answerMove}={}){
+export function recordPuzzleAttempt(db,{studentId,puzzleId,answerMove,now=new Date()}={}){
   const puzzle=db.prepare("SELECT id,best_move AS bestMove,status FROM training_puzzles WHERE id=? AND student_id=?").get(puzzleId,studentId);
   if(!puzzle)throw new TypeError('puzzle not found');
   const answer=String(answerMove||'').trim();if(!answer)throw new TypeError('answerMove required');
   const correct=answer.toLowerCase()===String(puzzle.bestMove||'').trim().toLowerCase();
-  db.prepare(`INSERT INTO training_puzzle_attempts(id,puzzle_id,student_id,answer_move,correct) VALUES (?,?,?,?,?)`).run(`TPA-${randomUUID()}`,puzzleId,studentId,answer,correct?1:0);
-  const recent=db.prepare('SELECT correct FROM training_puzzle_attempts WHERE puzzle_id=? ORDER BY attempted_at DESC LIMIT 3').all(puzzleId);
-  if(recent.length>=3&&recent.every(r=>r.correct===1))db.prepare("UPDATE training_puzzles SET status='mastered' WHERE id=?").run(puzzleId);
-  return {puzzleId,correct,mastered:recent.length>=3&&recent.every(r=>r.correct===1)};
+  const attemptedAt=now.toISOString();
+  db.prepare(`INSERT INTO training_puzzle_attempts(id,puzzle_id,student_id,answer_move,correct,attempted_at) VALUES (?,?,?,?,?,?)`).run(`TPA-${randomUUID()}`,puzzleId,studentId,answer,correct?1:0,attemptedAt);
+  const correctRows=db.prepare('SELECT attempted_at AS attemptedAt FROM training_puzzle_attempts WHERE puzzle_id=? AND correct=1 ORDER BY attempted_at').all(puzzleId);
+  let spaced=0,last=null;for(const row of correctRows){const at=Date.parse(row.attemptedAt);if(!Number.isFinite(at))continue;if(last==null||at-last>=86400000){spaced+=1;last=at;}}
+  const mastered=spaced>=3;if(mastered){db.prepare("UPDATE training_puzzles SET status='mastered' WHERE id=?").run(puzzleId);const full=db.prepare('SELECT skill_id AS skillId FROM training_puzzles WHERE id=?').get(puzzleId);if(full?.skillId){const state=db.prepare('SELECT status,evidence_json AS evidenceJson FROM student_skills WHERE student_id=? AND skill_id=?').get(studentId,full.skillId);if(state?.status!=='regressed'&&state?.status!=='applied_in_game'){let evidence={};try{evidence=JSON.parse(state?.evidenceJson||'{}');}catch{};evidence={...evidence,drill:{puzzleId,spacedCorrectAttempts:spaced,masteredAt:attemptedAt}};db.prepare(`INSERT INTO student_skills(student_id,skill_id,status,confidence,evidence_json,last_assessed_at,updated_at) VALUES (?,?,'drill_mastered',85,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(student_id,skill_id) DO UPDATE SET status='drill_mastered',confidence=MAX(COALESCE(student_skills.confidence,0),85),evidence_json=excluded.evidence_json,last_assessed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).run(studentId,full.skillId,JSON.stringify(evidence));}}}
+  return {puzzleId,correct,mastered,spacedCorrectAttempts:spaced};
 }
+
 function recommendedLesson(db,skillId,locale='en'){
   if(!skillId)return null;
   const row=db.prepare(`SELECT l.id,l.title,l.objective,cl.title AS localizedTitle,cl.objective AS localizedObjective

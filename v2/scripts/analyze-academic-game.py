@@ -9,7 +9,7 @@ import chess.engine
 import chess.pgn
 
 ENGINE_PATH = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
-ANALYSIS_VERSION = "academic-stockfish-v1"
+ANALYSIS_VERSION = "academic-stockfish-v2"
 PIECE_VALUE = {chess.PAWN:1, chess.KNIGHT:3, chess.BISHOP:3, chess.ROOK:5, chess.QUEEN:9, chess.KING:100}
 
 def cp(score, color):
@@ -96,10 +96,14 @@ def analyze(payload):
             san = board.san(move)
             if mover == student_color:
                 before_fen = board.fen()
-                info = engine.analyse(board, chess.engine.Limit(time=think))
+                multipv = engine.analyse(board, chess.engine.Limit(time=think), multipv=2)
+                lines = multipv if isinstance(multipv, list) else [multipv]
+                info = lines[0]
                 best_move = (info.get("pv") or [move])[0]
                 best_san = board.san(best_move)
                 best_cp = cp(info["score"], mover)
+                second_cp = cp(lines[1]["score"], mover) if len(lines) > 1 else best_cp - 100000
+                solution_margin_cp = max(0, best_cp - second_cp)
                 board_after = board.copy(stack=False)
                 board_after.push(move)
                 after_info = engine.analyse(board_after, chess.engine.Limit(time=think))
@@ -110,7 +114,7 @@ def analyze(payload):
                 if loss >= 100:
                     if ply < 20: opening_critical += 1
                     kind, skill, confidence = classify(board, best_move, move, loss, ply)
-                    critical.append({"ply":ply+1,"moveNumber":board.fullmove_number,"fenBefore":before_fen,"movePlayedUci":move.uci(),"movePlayedSan":san,"bestMoveUci":best_move.uci(),"bestMoveSan":best_san,"cpLoss":loss,"severity":severity(loss),"findingType":kind,"suggestedSkillCode":skill,"classifierConfidence":confidence})
+                    critical.append({"ply":ply+1,"moveNumber":board.fullmove_number,"fenBefore":before_fen,"movePlayedUci":move.uci(),"movePlayedSan":san,"bestMoveUci":best_move.uci(),"bestMoveSan":best_san,"cpLoss":loss,"severity":severity(loss),"findingType":kind,"suggestedSkillCode":skill,"classifierConfidence":confidence,"solutionMarginCp":solution_margin_cp})
             board.push(move)
             node = nxt; ply += 1
     finally:

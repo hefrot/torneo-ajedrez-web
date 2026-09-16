@@ -30,17 +30,24 @@ const items=[
 ];
 
 const rows=items.map(([id,skillCode,stage,promptEn,promptEs,optionsEn,optionsEs,correct],index)=>({id:`DIAG0800-${id}`,skillCode,stage,sequence:index+1,correct,prompt:{en:promptEn,es:promptEs},options:{en:optionsEn,es:optionsEs}}));
+
+const anchorRows=[
+  {id:'DIAG0800-ANCHOR-STALEMATE',skillCode:'FND-MATE1',stage:'foundations',sequence:101,fen:'7k/5K2/6Q1/8/8/8/8/8 b - - 0 1',correct:'B',prompt:{en:'Black to move. Is this checkmate or stalemate?',es:'Juegan negras. ¿Es jaque mate o ahogado?'},options:{en:['Checkmate','Stalemate','Black wins','Illegal position'],es:['Jaque mate','Ahogado','Ganan negras','Posición ilegal']}},
+  {id:'DIAG0800-ANCHOR-ROOKMATE',skillCode:'DEV-LADDER',stage:'foundations',sequence:102,fen:'7k/8/6K1/8/8/8/8/R7 w - - 0 1',correct:'A',prompt:{en:'White to move. Which move finishes the basic rook-and-king mate?',es:'Juegan blancas. ¿Qué jugada termina el mate básico de torre y rey?'},options:{en:['Ra8#','Rh1+','Kg7','Ra7'],es:['Ta8#','Th1+','Rg7','Ta7']}},
+  {id:'DIAG0800-ANCHOR-CASTLE',skillCode:'FND-LEGAL',stage:'foundations',sequence:103,fen:'4k3/8/8/1b6/8/8/8/4K2R w K - 0 1',correct:'B',prompt:{en:'Can White legally castle kingside in this position?',es:'¿Pueden las blancas enrocar legalmente por el lado del rey en esta posición?'},options:{en:['Yes','No, the king would cross an attacked square','Only if Black agrees','Only in blitz'],es:['Sí','No, el rey cruzaría una casilla atacada','Solo si negras aceptan','Solo en blitz']}}
+];
+
 const skillIdByCode=(db,code)=>db.prepare(`SELECT s.id FROM curriculum_skills s JOIN curriculum_tracks t ON t.id=s.track_id WHERE s.code=? AND t.framework_id=?`).get(code,HMENA_FRAMEWORK_ID)?.id;
 
 export function seedDiagnostic0800(db){
   db.prepare(`INSERT INTO diagnostic_blueprints(id,code,title,min_rating,max_rating,active) VALUES ('DIAG-HMENA-0-800',?,?,0,800,1) ON CONFLICT(id) DO UPDATE SET active=1`).run(DIAGNOSTIC_CODE,'HMENA 0–800 Diagnostic');
-  const item=db.prepare(`INSERT INTO diagnostic_items(id,blueprint_id,skill_id,stage,sequence_no,correct_answer,active) VALUES (?, 'DIAG-HMENA-0-800',?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET skill_id=excluded.skill_id,stage=excluded.stage,sequence_no=excluded.sequence_no,correct_answer=excluded.correct_answer,active=1`);
+  const item=db.prepare(`INSERT INTO diagnostic_items(id,blueprint_id,skill_id,stage,sequence_no,is_anchor,fen,correct_answer,active) VALUES (?, 'DIAG-HMENA-0-800',?,?,?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET skill_id=excluded.skill_id,stage=excluded.stage,sequence_no=excluded.sequence_no,is_anchor=excluded.is_anchor,fen=excluded.fen,correct_answer=excluded.correct_answer,active=1`);
   const loc=db.prepare(`INSERT INTO diagnostic_item_localizations(item_id,locale,prompt,options_json) VALUES (?,?,?,?) ON CONFLICT(item_id,locale) DO UPDATE SET prompt=excluded.prompt,options_json=excluded.options_json`);
-  db.transaction(()=>{for(const row of rows){const sid=skillIdByCode(db,row.skillCode);if(!sid)throw new Error(`missing skill ${row.skillCode}`);item.run(row.id,sid,row.stage,row.sequence,row.correct);for(const locale of ['en','es'])loc.run(row.id,locale,row.prompt[locale],JSON.stringify(row.options[locale]));}})();
-  return {code:DIAGNOSTIC_CODE,items:rows.length,foundations:rows.filter(x=>x.stage==='foundations').length,development:rows.filter(x=>x.stage==='development').length};
+  db.transaction(()=>{for(const row of [...rows,...anchorRows]){const sid=skillIdByCode(db,row.skillCode);if(!sid)throw new Error(`missing skill ${row.skillCode}`);item.run(row.id,sid,row.stage,row.sequence,row.isAnchor?1:anchorRows.includes(row)?1:0,row.fen||null,row.correct);for(const locale of ['en','es'])loc.run(row.id,locale,row.prompt[locale],JSON.stringify(row.options[locale]));}})();
+  return {code:DIAGNOSTIC_CODE,items:rows.length+anchorRows.length,anchors:anchorRows.length,foundations:rows.filter(x=>x.stage==='foundations').length,development:rows.filter(x=>x.stage==='development').length};
 }const blueprint=()=> 'DIAG-HMENA-0-800';
-const itemForClient=(row,locale)=>({id:row.id,skillCode:row.skill_code,stage:row.stage,sequence:row.stage==='development'?row.sequence_no-11:row.sequence_no,prompt:row.prompt,options:JSON.parse(row.options_json||'[]')});
-const scoreStage=(db,attemptId,stage)=>{const row=db.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN r.correct=1 THEN 1 ELSE 0 END) AS correct FROM diagnostic_items i LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND i.active=1`).get(attemptId,blueprint(),stage);return {correct:Number(row.correct||0),total:Number(row.total||0),percent:row.total?Math.round((Number(row.correct||0)/Number(row.total))*100):0};};
+const itemForClient=(row,locale)=>({id:row.id,skillCode:row.skill_code,stage:row.stage,sequence:row.is_anchor?null:(row.stage==='development'?row.sequence_no-11:row.sequence_no),isAnchor:Boolean(row.is_anchor),fen:row.fen||null,prompt:row.prompt,options:JSON.parse(row.options_json||'[]')});
+const scoreStage=(db,attemptId,stage)=>{const row=db.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN r.correct=1 THEN 1 ELSE 0 END) AS correct FROM diagnostic_items i LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND i.active=1 AND COALESCE(i.is_anchor,0)=0`).get(attemptId,blueprint(),stage);return {correct:Number(row.correct||0),total:Number(row.total||0),percent:row.total?Math.round((Number(row.correct||0)/Number(row.total))*100):0};};
 const authorizedStudent=(db,accountId,studentId)=>Boolean(db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(accountId,studentId));
 
 const ratingSeedThresholds={lichess:{rapid:1100,classical:1050},chesscom:{rapid:850}};
@@ -48,9 +55,15 @@ export function diagnosticEntryPoint(db,studentId){
   const student=db.prepare('SELECT player_id AS playerId FROM students WHERE id=?').get(studentId);if(!student)return null;
   const signals=[];
   if(student.playerId){
-    const rows=db.prepare(`SELECT platform,rating_type AS ratingType,rating,captured_at AS capturedAt FROM external_rating_snapshots WHERE player_id=? AND rating_type IN ('rapid','classical') ORDER BY captured_at DESC`).all(student.playerId);
+    const rows=db.prepare(`SELECT platform,rating_type AS ratingType,rating,games_count AS gamesCount,rating_deviation AS ratingDeviation,provisional,captured_at AS capturedAt FROM external_rating_snapshots WHERE player_id=? AND rating_type IN ('rapid','classical') ORDER BY captured_at DESC`).all(student.playerId);
     const seen=new Set();
-    for(const row of rows){const key=`${row.platform}:${row.ratingType}`;if(seen.has(key))continue;seen.add(key);const threshold=ratingSeedThresholds[row.platform]?.[row.ratingType];if(threshold)signals.push({...row,threshold,qualifies:Number(row.rating)>=threshold});}
+    for(const row of rows){
+      const key=`${row.platform}:${row.ratingType}`;if(seen.has(key))continue;seen.add(key);
+      const threshold=ratingSeedThresholds[row.platform]?.[row.ratingType];if(!threshold)continue;
+      const games=Number(row.gamesCount||0),rd=row.ratingDeviation==null?null:Number(row.ratingDeviation);
+      const reliable=row.platform==='lichess'?(row.provisional!==1&&rd!=null&&rd<110):(row.platform==='chesscom'?games>=20:false);
+      signals.push({...row,threshold,reliable,qualifies:reliable&&Number(row.rating)>=threshold,reliabilityReason:reliable?'stable':row.platform==='lichess'?'provisional_or_high_rd':'insufficient_games'});
+    }
   }
   const qualifying=signals.filter(x=>x.qualifies);
   if(qualifying.length)return {stage:'development',basis:'rating_seed',confidence:qualifying.length>1?70:60,signals};
@@ -74,7 +87,8 @@ export function diagnosticState(db,{accountId,attemptId:aid,locale='en'}={}){
   if(!attempt||!authorizedStudent(db,accountId,attempt.studentId))return null;
   const lang=localeOf(locale);attempt.entryEvidence=JSON.parse(attempt.entryEvidenceJson||'{}');delete attempt.entryEvidenceJson;
   if(attempt.status==='completed'){const summary=JSON.parse(attempt.summaryJson||'{}');const localize=db.prepare(`SELECT cs.code,COALESCE(cl.title,cs.title) AS title FROM curriculum_skills cs LEFT JOIN curriculum_localizations cl ON cl.entity_type='skill' AND cl.entity_id=cs.id AND cl.locale=? WHERE cs.code=?`);summary.gaps=(summary.gaps||[]).map(g=>({...g,title:localize.get(lang,g.code)?.title||g.code}));return {...attempt,summary,item:null};}
-  const next=db.prepare(`SELECT i.id,i.stage,i.sequence_no,l.prompt,l.options_json,cs.code AS skill_code FROM diagnostic_items i JOIN diagnostic_item_localizations l ON l.item_id=i.id AND l.locale=? JOIN curriculum_skills cs ON cs.id=i.skill_id LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND i.active=1 AND r.item_id IS NULL ORDER BY i.sequence_no LIMIT 1`).get(lang,aid,blueprint(),attempt.stage);
+  const anchorFirst=attempt.entryStage==='development';
+  const next=anchorFirst?db.prepare(`SELECT i.id,i.stage,i.sequence_no,i.is_anchor,i.fen,l.prompt,l.options_json,cs.code AS skill_code FROM diagnostic_items i JOIN diagnostic_item_localizations l ON l.item_id=i.id AND l.locale=? JOIN curriculum_skills cs ON cs.id=i.skill_id LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.is_anchor=1 AND i.active=1 AND r.item_id IS NULL ORDER BY i.sequence_no LIMIT 1`).get(lang,aid,blueprint())||db.prepare(`SELECT i.id,i.stage,i.sequence_no,i.is_anchor,i.fen,l.prompt,l.options_json,cs.code AS skill_code FROM diagnostic_items i JOIN diagnostic_item_localizations l ON l.item_id=i.id AND l.locale=? JOIN curriculum_skills cs ON cs.id=i.skill_id LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND COALESCE(i.is_anchor,0)=0 AND i.active=1 AND r.item_id IS NULL ORDER BY i.sequence_no LIMIT 1`).get(lang,aid,blueprint(),attempt.stage):db.prepare(`SELECT i.id,i.stage,i.sequence_no,i.is_anchor,i.fen,l.prompt,l.options_json,cs.code AS skill_code FROM diagnostic_items i JOIN diagnostic_item_localizations l ON l.item_id=i.id AND l.locale=? JOIN curriculum_skills cs ON cs.id=i.skill_id LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND i.active=1 AND r.item_id IS NULL ORDER BY i.sequence_no LIMIT 1`).get(lang,aid,blueprint(),attempt.stage);
   return {...attempt,item:next?itemForClient(next,lang):null};
 }function stageFinished(db,attemptId,stage){
   const row=db.prepare(`SELECT COUNT(*) AS remaining FROM diagnostic_items i LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND i.active=1 AND r.item_id IS NULL`).get(attemptId,blueprint(),stage);
@@ -103,9 +117,10 @@ function completeAttempt(db,attempt,locale){
   const development=scoreStage(db,attempt.id,'development');
   const bandCode=skippedFoundations?(development.percent>=DEVELOPMENT_PASS?'hmena-800-1200':'hmena-400-800'):(foundations.percent<FOUNDATION_PASS?'hmena-0-400':development.percent>=DEVELOPMENT_PASS?'hmena-800-1200':'hmena-400-800');
   const confidence=bandCode==='hmena-800-1200'?65:skippedFoundations?70:80;
-  const gaps=db.prepare(`SELECT cs.code,i.stage FROM diagnostic_responses r JOIN diagnostic_items i ON i.id=r.item_id JOIN curriculum_skills cs ON cs.id=i.skill_id WHERE r.attempt_id=? AND r.correct=0 ORDER BY i.sequence_no`).all(attempt.id);
+  const gaps=db.prepare(`SELECT cs.code,i.stage,i.is_anchor AS isAnchor FROM diagnostic_responses r JOIN diagnostic_items i ON i.id=r.item_id JOIN curriculum_skills cs ON cs.id=i.skill_id WHERE r.attempt_id=? AND r.correct=0 ORDER BY i.sequence_no`).all(attempt.id);
   const foundationCheckRecommended=skippedFoundations&&development.percent<45;
-  const summary={foundations,development,gaps,cleared0800:bandCode==='hmena-800-1200',entryStage:attempt.entryStage,entryBasis:attempt.entryBasis,foundationCheckRecommended};
+  const anchorResults=gaps.filter(g=>g.isAnchor);
+  const summary={foundations,development,gaps,anchorGaps:anchorResults,anchorsPassed:3-anchorResults.length,cleared0800:bandCode==='hmena-800-1200',entryStage:attempt.entryStage,entryBasis:attempt.entryBasis,foundationCheckRecommended};
   db.transaction(()=>{
     db.prepare(`UPDATE diagnostic_attempts SET status='completed',stage='completed',completed_at=CURRENT_TIMESTAMP,foundations_score=?,development_score=?,placement_band_code=?,summary_json=? WHERE id=?`).run(foundations.percent,development.percent,bandCode,JSON.stringify(summary),attempt.id);
     const note=skippedFoundations?(bandCode==='hmena-800-1200'?'Rating-seeded challenge-out cleared 400–800 screening.':'Rating-seeded screening placed student in 400–800; targeted foundation check may still be useful.'):(bandCode==='hmena-800-1200'?'Cleared HMENA 0–800 screening; continue with 800–1200 diagnostic.':'HMENA 0–800 adaptive diagnostic.');
@@ -122,8 +137,8 @@ export function submitDiagnosticAnswer(db,{accountId,attemptId:aid,itemId,answer
   const attempt=db.prepare("SELECT id,student_id AS studentId,status,stage,entry_stage AS entryStage,entry_basis AS entryBasis FROM diagnostic_attempts WHERE id=?").get(aid);
   if(!attempt||!authorizedStudent(db,accountId,attempt.studentId))throw new TypeError('diagnostic not authorized');
   if(attempt.status!=='in_progress')throw new TypeError('diagnostic already completed');
-  const item=db.prepare('SELECT id,stage,correct_answer AS correctAnswer FROM diagnostic_items WHERE id=? AND blueprint_id=? AND active=1').get(itemId,blueprint());
-  if(!item||item.stage!==attempt.stage)throw new TypeError('invalid diagnostic item');
+  const item=db.prepare('SELECT id,stage,is_anchor AS isAnchor,correct_answer AS correctAnswer FROM diagnostic_items WHERE id=? AND blueprint_id=? AND active=1').get(itemId,blueprint());
+  if(!item||(!item.isAnchor&&item.stage!==attempt.stage)||(item.isAnchor&&attempt.entryStage!=='development'&&item.stage!==attempt.stage))throw new TypeError('invalid diagnostic item');
   const answer=String(answerKey||'').toUpperCase();if(!['A','B','C','D'].includes(answer))throw new TypeError('invalid answer');
   const correct=answer===item.correctAnswer?1:0;
   db.prepare(`INSERT INTO diagnostic_responses(attempt_id,item_id,answer_key,correct,answered_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(attempt_id,item_id) DO UPDATE SET answer_key=excluded.answer_key,correct=excluded.correct,answered_at=CURRENT_TIMESTAMP`).run(aid,itemId,answer,correct);

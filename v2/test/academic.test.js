@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.js';
 import {createStudent,createSchool,createProgram,enrollStudent,listPrograms,listStudents,saveSessionAttendance,studentProfile,addCoachNote} from '../src/academic.js';
+import {seedHmenaFramework} from '../src/hmena-curriculum.js';
+import {seedHmenaCourse0800} from '../src/hmena-course.js';
 
 test('coach can create a student and enroll them in a school cohort',()=>{
   const db=openDatabase(':memory:');
@@ -43,4 +45,15 @@ test('attendance rejects a student outside the session program',()=>{
   db.prepare("INSERT INTO class_sessions(id,program_id,starts_at) VALUES ('S2',?, '2026-09-15T15:00:00-07:00')").run(program.id);
   assert.throws(()=>saveSessionAttendance(db,'S2',[{studentId:student.id,status:'present'}]),/not enrolled/);
   db.close();
+});
+
+test('class attendance advances only safe mastery states',()=>{
+  const db=openDatabase(':memory:');seedHmenaFramework(db);seedHmenaCourse0800(db);
+  const student=createStudent(db,{displayName:'Class Evidence'}),program=createProgram(db,{name:'Private',programType:'private'});enrollStudent(db,{programId:program.id,studentId:student.id});
+  db.prepare("INSERT INTO class_sessions(id,program_id,starts_at) VALUES ('SE',?,'2026-09-15T17:00:00Z')").run(program.id);
+  db.prepare("INSERT INTO session_lessons(session_id,lesson_id,sequence_no,delivery_stage) VALUES ('SE','LESSON-HMENA-0400-L01',1,'solved_exercises')").run();
+  saveSessionAttendance(db,'SE',[{studentId:student.id,status:'present',comprehensionScore:2}]);
+  let row=db.prepare("SELECT ss.status FROM student_skills ss JOIN curriculum_skills cs ON cs.id=ss.skill_id WHERE ss.student_id=? AND cs.code='FND-BOARD'").get(student.id);assert.equal(row.status,'introduced');
+  saveSessionAttendance(db,'SE',[{studentId:student.id,status:'present',comprehensionScore:4}]);
+  row=db.prepare("SELECT ss.status FROM student_skills ss JOIN curriculum_skills cs ON cs.id=ss.skill_id WHERE ss.student_id=? AND cs.code='FND-BOARD'").get(student.id);assert.equal(row.status,'practicing');db.close();
 });

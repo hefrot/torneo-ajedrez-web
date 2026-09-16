@@ -8,8 +8,8 @@ export const NEXT_LESSON_VERSION='hmena-next-v1';
 const mastered=new Set(['drill_mastered','applied_in_game']);
 const baseScore={regressed:100,practicing:72,introduced:40,drill_mastered:30,unseen:55,applied_in_game:0};
 const reasonCopy={
-  en:{regressed:'Regression detected',practicing:'Still in practice',introduced:'Introduced but not mastered',unseen:'Ready for a new skill',transfer:'Needs transfer from drills to real games',games:'Recurring mistakes in recent games',puzzles:'Active puzzles from mistakes',comprehension:'Low comprehension in related classes',absence:'Missed a related class',diagnostic:'Diagnostic evidence shows a gap',opening:'Opening performance needs reinforcement',prerequisite:'Required prerequisite is not secure',blocked_evidence:'This prerequisite unlocks a higher-priority recurring issue'},
-  es:{regressed:'Se detectó regresión',practicing:'Sigue en práctica',introduced:'Fue introducida pero no está dominada',unseen:'Está lista como habilidad nueva',transfer:'Falta transferir de ejercicios a partidas reales',games:'Errores recurrentes en partidas recientes',puzzles:'Problemas activos creados desde sus errores',comprehension:'Baja comprensión en clases relacionadas',absence:'Faltó a una clase relacionada',diagnostic:'El diagnóstico muestra un hueco',opening:'El rendimiento de apertura necesita refuerzo',prerequisite:'Un prerrequisito necesario aún no está sólido',blocked_evidence:'Este prerrequisito desbloquea un problema recurrente de mayor prioridad'}
+  en:{regressed:'Regression detected',practicing:'Still in practice',introduced:'Introduced but not mastered',unseen:'Ready for a new skill',transfer:'Needs transfer from drills to real games',games:'Recurring mistakes in recent games',puzzles:'Active puzzles from mistakes',comprehension:'Low comprehension in related classes',absence:'Missed a related class',diagnostic:'Diagnostic evidence shows a gap',opening:'Opening performance needs reinforcement',prerequisite:'Required prerequisite is not secure',blocked_evidence:'This prerequisite unlocks a higher-priority recurring issue',parallel:'Rotate to a parallel learning branch to avoid over-repetition'},
+  es:{regressed:'Se detectó regresión',practicing:'Sigue en práctica',introduced:'Fue introducida pero no está dominada',unseen:'Está lista como habilidad nueva',transfer:'Falta transferir de ejercicios a partidas reales',games:'Errores recurrentes en partidas recientes',puzzles:'Problemas activos creados desde sus errores',comprehension:'Baja comprensión en clases relacionadas',absence:'Faltó a una clase relacionada',diagnostic:'El diagnóstico muestra un hueco',opening:'El rendimiento de apertura necesita refuerzo',prerequisite:'Un prerrequisito necesario aún no está sólido',blocked_evidence:'Este prerrequisito desbloquea un problema recurrente de mayor prioridad',parallel:'Rotar a una rama paralela para evitar repetición excesiva'}
 };
 const parseJson=value=>{try{return JSON.parse(value||'{}');}catch{return {};}};
 const addReason=(candidate,code,weight,detail=null)=>{candidate.score+=weight;candidate.reasons.push({code,weight,detail});};
@@ -78,9 +78,13 @@ function addStatusReason(candidate){
   const code=candidate.status==='drill_mastered'?'transfer':candidate.status;
   if(['regressed','practicing','introduced','unseen','transfer'].includes(code))candidate.reasons.unshift({code,weight:Number(baseScore[candidate.status]||0),detail:null});
 }
-function applyGameEvidence(db,map,studentId){
-  const rows=db.prepare(`SELECT skill_id AS skillId,COUNT(*) AS occurrences,AVG(COALESCE(severity,1)) AS avgSeverity,MAX(created_at) AS lastSeen FROM student_game_findings WHERE student_id=? AND skill_id IS NOT NULL GROUP BY skill_id`).all(studentId);
-  for(const row of rows){const c=ensureCandidate(db,map,studentId,row.skillId);if(!c)continue;const weight=Math.min(48,Math.round(Number(row.occurrences)*Number(row.avgSeverity)*3));addReason(c,'games',weight,{occurrences:Number(row.occurrences),avgSeverity:Number(Number(row.avgSeverity).toFixed(1)),lastSeen:row.lastSeen});}
+const gameModeFactor=value=>({rapid:1,classical:1,correspondence:1,daily:1,blitz:.25,bullet:0}[String(value||'').toLowerCase()]??.75);
+const decayWeight=(at,now)=>{const t=Date.parse(at||'');if(!Number.isFinite(t))return 1;const days=Math.max(0,(now.getTime()-t)/86400000);return Math.exp(-Math.log(2)*days/30);};
+function applyGameEvidence(db,map,studentId,{now=new Date()}={}){
+  const rows=db.prepare(`SELECT f.skill_id AS skillId,f.severity,f.created_at AS findingAt,COALESCE(g.played_at,f.created_at) AS evidenceAt,g.time_class AS timeClass FROM student_game_findings f LEFT JOIN academic_external_games g ON g.student_id=f.student_id AND g.external_game_id=f.source_game_id WHERE f.student_id=? AND f.skill_id IS NOT NULL`).all(studentId);
+  const grouped=new Map();
+  for(const row of rows){const factor=gameModeFactor(row.timeClass);if(factor<=0)continue;const effective=factor*decayWeight(row.evidenceAt,now);if(!grouped.has(row.skillId))grouped.set(row.skillId,{occurrences:0,effectiveOccurrences:0,severitySum:0,lastSeen:null,modes:{}});const g=grouped.get(row.skillId);g.occurrences+=1;g.effectiveOccurrences+=effective;g.severitySum+=Number(row.severity||1)*effective;g.lastSeen=!g.lastSeen||String(row.evidenceAt)>g.lastSeen?row.evidenceAt:g.lastSeen;const mode=String(row.timeClass||'unknown').toLowerCase();g.modes[mode]=(g.modes[mode]||0)+1;}
+  for(const [skillId,row] of grouped){const c=ensureCandidate(db,map,studentId,skillId);if(!c)continue;const avgSeverity=row.effectiveOccurrences?row.severitySum/row.effectiveOccurrences:0;const weight=Math.min(48,Math.round(row.effectiveOccurrences*avgSeverity*3));if(weight>0)addReason(c,'games',weight,{occurrences:row.occurrences,effectiveOccurrences:Number(row.effectiveOccurrences.toFixed(2)),avgSeverity:Number(avgSeverity.toFixed(1)),lastSeen:row.lastSeen,modes:row.modes});}
 }
 function applyPuzzleEvidence(db,map,studentId){
   const rows=db.prepare(`SELECT skill_id AS skillId,COUNT(*) AS active FROM training_puzzles WHERE student_id=? AND status='active' AND skill_id IS NOT NULL GROUP BY skill_id`).all(studentId);
@@ -128,6 +132,14 @@ function propagateBlockedEvidence(db,map,studentId,placement){
 function candidateReady(db,studentId,candidate,placement){
   return prerequisiteRows(db,studentId,candidate.id).every(p=>prerequisiteReady(p,placement));
 }
+function applyParallelBranchDiversity(db,map,studentId,placement){
+  const recent=db.prepare(`SELECT selected_skill_id AS skillId FROM coach_lesson_decisions WHERE student_id=? AND decision IN ('accepted','overridden') AND selected_skill_id IS NOT NULL ORDER BY created_at DESC,id DESC LIMIT 2`).all(studentId);
+  if(recent.length<2||recent[0].skillId!==recent[1].skillId)return;
+  const repeated=map.get(recent[0].skillId);if(!repeated)return;
+  repeated.score=Math.max(0,repeated.score-28);repeated.reasons.push({code:'parallel',weight:-28,detail:{repeatedTwice:true}});
+  const alternatives=[...map.values()].filter(c=>c.id!==repeated.id&&c.domain!==repeated.domain&&candidateReady(db,studentId,c,placement));
+  alternatives.sort((a,b)=>b.score-a.score||a.sequenceNo-b.sequenceNo);if(alternatives[0])addReason(alternatives[0],'parallel',16,{awayFrom:repeated.code});
+}
 function actionFor(candidate){
   if(candidate.status==='regressed')return 'reassess';
   if(candidate.reasons.some(r=>r.code==='games'))return 'review_and_drill';
@@ -148,13 +160,13 @@ function formatCandidate(db,candidate,locale){
   const confidence=Math.min(94,45+evidenceCodes.size*11+Math.min(20,candidate.reasons.length*3));
   return {skill:{id:skill.id,code:skill.code,title:skill.title,domain:skill.domain,status:skill.status,confidence:skill.confidence},lesson,score:Number(candidate.score.toFixed(1)),confidence,action:actionFor(candidate),reasons:localizedReasons(candidate,locale)};
 }
-export function nextLessonRecommendation(db,studentId,{locale='en'}={}){
+export function nextLessonRecommendation(db,studentId,{locale='en',now=new Date()}={}){
   const lang=normalizeLocale(locale);const student=db.prepare('SELECT id,display_name AS displayName FROM students WHERE id=?').get(studentId);if(!student)return null;
   const placement=getHmenaPlacement(db,studentId);
   if(!placement)return {student,locale:lang,kind:'diagnostic',placement:null,recommendation:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),nextPrivateSession:nextPrivateSession(db,studentId)},message:lang==='es'?'Primero completa el diagnóstico HMENA para recomendar una clase.':'Complete the HMENA diagnostic before recommending a lesson.'};
   const map=seedCandidates(db,studentId,placement);for(const c of map.values())addStatusReason(c);
-  applyGameEvidence(db,map,studentId);applyPuzzleEvidence(db,map,studentId);applyClassEvidence(db,map,studentId);applyDiagnosticEvidence(db,map,studentId);
-  const opening=applyOpeningEvidence(db,map,studentId,placement,lang);propagateBlockedEvidence(db,map,studentId,placement);
+  applyGameEvidence(db,map,studentId,{now});applyPuzzleEvidence(db,map,studentId);applyClassEvidence(db,map,studentId);applyDiagnosticEvidence(db,map,studentId);
+  const opening=applyOpeningEvidence(db,map,studentId,placement,lang);propagateBlockedEvidence(db,map,studentId,placement);applyParallelBranchDiversity(db,map,studentId,placement);
   const ranked=[...map.values()].filter(c=>c.score>0&&candidateReady(db,studentId,c,placement)).sort((a,b)=>b.score-a.score||a.sequenceNo-b.sequenceNo);
   if(!ranked.length){const lesson=assessmentLesson(db,placement.bandCode,lang);return {student,locale:lang,kind:'assessment',placement,recommendation:lesson?{skill:null,lesson,score:0,confidence:80,action:'assess',reasons:[]}:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),opening,nextPrivateSession:nextPrivateSession(db,studentId)},message:lang==='es'?'Las habilidades de la banda están sólidas; conviene reevaluar para avanzar.':'Band skills are secure; reassess for advancement.'};}
   const formatted=ranked.slice(0,4).map(c=>formatCandidate(db,c,lang));

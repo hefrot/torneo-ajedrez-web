@@ -28,9 +28,9 @@ test('three correct puzzle attempts mark the puzzle mastered',()=>{
   const student=createStudent(db,{displayName:'Puzzle Student'});finding(db,'P1',student.id,'DEV-FORK',4);
   const intel=studentTrainingIntelligence(db,student.id,{locale:'en'});const puzzle=intel.puzzles[0];
   assert.equal(Object.hasOwn(puzzle,'bestMove'),false);
-  recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1'});
-  recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1'});
-  const third=recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1'});
+  recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1',now:new Date('2026-09-10T10:00:00Z')});
+  recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1',now:new Date('2026-09-11T10:01:00Z')});
+  const third=recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1',now:new Date('2026-09-12T10:02:00Z')});
   assert.equal(third.mastered,true);
   assert.equal(db.prepare('SELECT status FROM training_puzzles WHERE id=?').get(puzzle.id).status,'mastered');
   db.close();
@@ -43,4 +43,12 @@ test('game reviews retain opening context independently of external provider',()
   assert.equal(intel.reviews[0].openingName,'Italian Game');
   assert.equal(intel.openings[0].games,1);
   db.close();
+});
+
+test('repeating the same puzzle immediately does not create mastery',()=>{
+  const db=openDatabase(':memory:');seedHmenaFramework(db);seedHmenaCourse0800(db);
+  const student=createStudent(db,{displayName:'Spaced Puzzle Student'});finding(db,'P2',student.id,'DEV-FORK',4);
+  const puzzle=studentTrainingIntelligence(db,student.id,{locale:'en'}).puzzles[0];
+  for(let i=0;i<3;i++)recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1',now:new Date(`2026-09-10T10:0${i}:00Z`)});
+  assert.equal(db.prepare('SELECT status FROM training_puzzles WHERE id=?').get(puzzle.id).status,'active');db.close();
 });

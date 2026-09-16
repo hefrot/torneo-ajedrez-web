@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS student_game_findings (
   severity INTEGER CHECK(severity BETWEEN 1 AND 5),
   engine_cp_loss INTEGER,
   classifier_confidence REAL CHECK(classifier_confidence BETWEEN 0 AND 1),
+  solution_margin_cp INTEGER,
   classifier_source TEXT,
   ply INTEGER,
   move_number INTEGER,
@@ -302,6 +303,7 @@ CREATE TABLE IF NOT EXISTS external_rating_snapshots (
   player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   platform TEXT NOT NULL CHECK(platform IN ('lichess','chesscom')),
   rating_type TEXT NOT NULL, rating INTEGER NOT NULL, games_count INTEGER,
+  rating_deviation REAL, provisional INTEGER CHECK(provisional IN (0,1)),
   snapshot_date TEXT NOT NULL, captured_at TEXT NOT NULL,
   UNIQUE(account_id,rating_type,snapshot_date)
 );
@@ -323,6 +325,8 @@ CREATE TABLE IF NOT EXISTS diagnostic_items (
   skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
   stage TEXT NOT NULL CHECK(stage IN ('foundations','development')),
   sequence_no INTEGER NOT NULL,
+  is_anchor INTEGER NOT NULL DEFAULT 0 CHECK(is_anchor IN (0,1)),
+  fen TEXT,
   correct_answer TEXT NOT NULL CHECK(correct_answer IN ('A','B','C','D')),
   active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
   UNIQUE(blueprint_id,sequence_no)
@@ -391,6 +395,7 @@ CREATE TABLE IF NOT EXISTS training_puzzles (
   fen TEXT NOT NULL,
   move_played TEXT,
   best_move TEXT,
+  solution_margin_cp INTEGER,
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','mastered','archived')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -452,3 +457,8 @@ CREATE TABLE IF NOT EXISTS coach_lesson_decisions (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_coach_lesson_decisions_student_time ON coach_lesson_decisions(student_id,created_at);
+
+CREATE VIEW IF NOT EXISTS v_public_league_accounts AS
+SELECT p.id,p.name,p.registration_status,p.availability,p.last_activity_at,a.platform,a.username,a.verified_at,a.verification_source
+FROM players p JOIN player_accounts a ON a.player_id=p.id
+WHERE p.registration_status='registered' AND a.account_status='verified' AND a.verified_at IS NOT NULL;

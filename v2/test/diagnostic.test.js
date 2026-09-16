@@ -31,15 +31,15 @@ test('diagnostic stops after Foundations when the base is weak',()=>{
   const items=db.prepare("SELECT id,correct_answer AS correctAnswer FROM diagnostic_items WHERE stage='foundations' ORDER BY sequence_no").all();
   let result=null;for(const item of items)result=submitDiagnosticAnswer(db,{accountId:portal.accountId,attemptId,itemId:item.id,answerKey:wrong(item.correctAnswer),locale:'en'});
   assert.equal(result.completed,true);assert.equal(result.placementBandCode,'hmena-0-400');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM diagnostic_responses WHERE attempt_id=?').get(attemptId).n,11);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM diagnostic_responses WHERE attempt_id=?').get(attemptId).n,14);
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM assessments WHERE student_id=? AND kind='initial'").get(student.id).n,1);
   db.close();
 });
 test('diagnostic advances to Development and marks 800+ readiness when both stages pass',()=>{
   const {db,student,portal}=setup();
   const {attemptId}=startDiagnostic0800(db,{accountId:portal.accountId,studentId:student.id,locale:'es'});
-  const all=db.prepare("SELECT id,stage,correct_answer AS correctAnswer FROM diagnostic_items ORDER BY sequence_no").all();
-  let result=null;for(const item of all)result=submitDiagnosticAnswer(db,{accountId:portal.accountId,attemptId,itemId:item.id,answerKey:item.correctAnswer,locale:'es'});
+  let result=null;
+  while(true){const state=diagnosticState(db,{accountId:portal.accountId,attemptId,locale:'es'});if(state.status==='completed')break;const item=db.prepare('SELECT correct_answer AS correctAnswer FROM diagnostic_items WHERE id=?').get(state.item.id);result=submitDiagnosticAnswer(db,{accountId:portal.accountId,attemptId,itemId:state.item.id,answerKey:item.correctAnswer,locale:'es'});if(result?.completed)break;}
   assert.equal(result.completed,true);assert.equal(result.placementBandCode,'hmena-800-1200');assert.equal(result.summary.cleared0800,true);
   const placement=db.prepare(`SELECT t.code,p.placement_source AS source FROM student_curriculum_placements p JOIN curriculum_tracks t ON t.id=p.track_id WHERE p.student_id=?`).get(student.id);
   assert.equal(placement.code,'hmena-800-1200');assert.equal(placement.source,'assessment');
