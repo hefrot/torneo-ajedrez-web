@@ -59,7 +59,8 @@ export function studentPracticeBank(db,studentId,{limit=3}={}){
     ORDER BY a.attempted_at DESC LIMIT 30`).all(studentId).map(row=>({...row,themes:parse(row.themesJson)}));
   const byTheme=new Map();for(const row of history){for(const theme of row.themes||[]){if(['short','long','veryLong','middlegame','endgame','advantage','crushing'].includes(theme))continue;const x=byTheme.get(theme)||{theme,attempts:0,correct:0};x.attempts++;x.correct+=row.correct?1:0;byTheme.set(theme,x);}}
   const themeStats=[...byTheme.values()].map(x=>({...x,accuracy:Math.round(x.correct/x.attempts*100)})).sort((a,b)=>b.attempts-a.attempts||b.accuracy-a.accuracy).slice(0,8);
-  return {targetThemes:themes,targetRating:rating,profile,history:history.reverse().map(({themesJson,...row})=>row),themeStats,summary:{attempts7d:Number(attempts7d?.n||0),correct7d:Number(attempts7d?.c||0)},puzzles:pool.slice(0,Math.max(1,Math.min(12,Number(limit)||3))).map(({themesJson,...row})=>row)};
+  const activeStreak=db.prepare("SELECT id,score FROM practice_streak_runs WHERE student_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId),bestStreakRun=Number(db.prepare("SELECT MAX(score) AS n FROM practice_streak_runs WHERE student_id=? AND status='completed'").get(studentId)?.n||0);
+  return {targetThemes:themes,targetRating:rating,profile,history:history.reverse().map(({themesJson,...row})=>row),themeStats,streakMode:{activeRunId:activeStreak?.id||null,current:Number(activeStreak?.score||0),best:bestStreakRun},summary:{attempts7d:Number(attempts7d?.n||0),correct7d:Number(attempts7d?.c||0)},puzzles:pool.slice(0,Math.max(1,Math.min(12,Number(limit)||3))).map(({themesJson,...row})=>row)};
 }
 export function recordPracticeBankAttempt(db,{studentId,puzzleId,answerMove}={}){
   const puzzle=db.prepare("SELECT id,best_move AS bestMove,rating FROM practice_bank_puzzles WHERE id=? AND active=1").get(puzzleId);
@@ -71,11 +72,54 @@ export function recordPracticeBankAttempt(db,{studentId,puzzleId,answerMove}={})
     const expected=1/(1+Math.pow(10,(puzzleRating-before)/400)),k=profile.attempts<20?40:24;
     const after=rated?Math.max(400,Math.min(2500,Math.round(before+k*((correct?1:0)-expected)))):before;
     const streak=rated?(correct?Number(profile.streak||0)+1:0):Number(profile.streak||0),best=Math.max(Number(profile.bestStreak||0),streak);
+    const attemptId=`PBA-${randomUUID()}`;
     db.prepare(`INSERT INTO practice_bank_attempts(id,puzzle_id,student_id,answer_move,correct,puzzle_rating,rating_before,rating_after,streak_after)
-      VALUES (?,?,?,?,?,?,?,?,?)`).run(`PBA-${randomUUID()}`,puzzle.id,studentId,answer||null,correct?1:0,puzzleRating,before,after,streak);
+      VALUES (?,?,?,?,?,?,?,?,?)`).run(attemptId,puzzle.id,studentId,answer||null,correct?1:0,puzzleRating,before,after,streak);
     if(rated)db.prepare(`UPDATE student_practice_profiles SET rating=?,attempts=attempts+1,correct=correct+?,streak=?,best_streak=?,updated_at=CURRENT_TIMESTAMP WHERE student_id=?`)
       .run(after,correct?1:0,streak,best,studentId);
-    result={puzzleId:puzzle.id,correct,rated,puzzleRating,ratingBefore:before,ratingAfter:after,ratingDelta:after-before,streak,bestStreak:best};
+    result={attemptId,puzzleId:puzzle.id,correct,rated,puzzleRating,ratingBefore:before,ratingAfter:after,ratingDelta:after-before,streak,bestStreak:best};
   })();
   return {...result,profile:studentPracticeProfile(db,studentId)};
+}
+
+function safeBankPuzzle(row){if(!row)return null;return {id:row.id,sourceId:row.sourceId,fen:row.fen,rating:row.rating,popularity:row.popularity,plays:row.plays,sideToMove:row.sideToMove,themes:parse(row.themesJson)};}
+function pickStreakPuzzle(db,studentId,runId,score){
+  const profile=studentPracticeProfile(db,studentId),themes=targetThemes(db,studentId),target=Math.max(600,Math.min(1800,profile.rating-100+Number(score||0)*35));
+  const attempted=new Set(db.prepare('SELECT DISTINCT puzzle_id AS id FROM practice_bank_attempts WHERE student_id=?').all(studentId).map(x=>x.id));
+  const used=new Set(db.prepare('SELECT puzzle_id AS id FROM practice_streak_items WHERE run_id=?').all(runId).map(x=>x.id));
+  const rows=db.prepare(`SELECT id,source_id AS sourceId,fen,rating,popularity,plays,themes_json AS themesJson,side_to_move AS sideToMove FROM practice_bank_puzzles WHERE active=1`).all();
+  let pool=rows.filter(row=>!used.has(row.id)&&!attempted.has(row.id)&&parse(row.themesJson).some(t=>themes.includes(t)));
+  if(!pool.length)pool=rows.filter(row=>!used.has(row.id)&&parse(row.themesJson).some(t=>themes.includes(t)));
+  if(!pool.length)return null;
+  pool.sort((a,b)=>Math.abs(Number(a.rating||target)-target)-Math.abs(Number(b.rating||target)-target)||Number(b.popularity||0)-Number(a.popularity||0)||hash(`${runId}:${a.id}`).localeCompare(hash(`${runId}:${b.id}`)));
+  return safeBankPuzzle(pool[0]);
+}
+function streakRunRow(db,runId,studentId){return db.prepare(`SELECT id,student_id AS studentId,status,score,current_puzzle_id AS currentPuzzleId,started_rating AS startedRating,started_at AS startedAt,completed_at AS completedAt FROM practice_streak_runs WHERE id=? AND student_id=?`).get(runId,studentId);}
+export function practiceStreakState(db,{studentId,runId}={}){
+  const run=streakRunRow(db,runId,studentId);if(!run)return null;
+  const puzzle=run.currentPuzzleId?safeBankPuzzle(db.prepare(`SELECT id,source_id AS sourceId,fen,rating,popularity,plays,themes_json AS themesJson,side_to_move AS sideToMove FROM practice_bank_puzzles WHERE id=?`).get(run.currentPuzzleId)):null;
+  const best=Number(db.prepare("SELECT MAX(score) AS n FROM practice_streak_runs WHERE student_id=? AND status='completed'").get(studentId)?.n||0);
+  return {...run,score:Number(run.score||0),best,puzzle,profile:studentPracticeProfile(db,studentId)};
+}
+export function startPracticeStreak(db,{studentId}={}){
+  if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))throw new TypeError('student not found');
+  const existing=db.prepare("SELECT id FROM practice_streak_runs WHERE student_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId);if(existing)return practiceStreakState(db,{studentId,runId:existing.id});
+  const profile=studentPracticeProfile(db,studentId),runId=`PST-${randomUUID()}`;
+  db.prepare("INSERT INTO practice_streak_runs(id,student_id,started_rating) VALUES (?,?,?)").run(runId,studentId,profile.rating);
+  const puzzle=pickStreakPuzzle(db,studentId,runId,0);if(!puzzle){db.prepare("UPDATE practice_streak_runs SET status='completed',completed_at=CURRENT_TIMESTAMP WHERE id=?").run(runId);return practiceStreakState(db,{studentId,runId});}
+  db.prepare('UPDATE practice_streak_runs SET current_puzzle_id=? WHERE id=?').run(puzzle.id,runId);db.prepare('INSERT INTO practice_streak_items(run_id,sequence_no,puzzle_id) VALUES (?,?,?)').run(runId,1,puzzle.id);
+  return practiceStreakState(db,{studentId,runId});
+}
+export function submitPracticeStreakMove(db,{studentId,runId,answerMove}={}){
+  const run=streakRunRow(db,runId,studentId);if(!run||run.status!=='in_progress'||!run.currentPuzzleId)throw new TypeError('streak run not active');
+  let result;
+  db.transaction(()=>{
+    const attempt=recordPracticeBankAttempt(db,{studentId,puzzleId:run.currentPuzzleId,answerMove});
+    const seq=Number(run.score||0)+1;db.prepare('UPDATE practice_streak_items SET attempt_id=?,correct=? WHERE run_id=? AND sequence_no=?').run(attempt.attemptId,attempt.correct?1:0,runId,seq);
+    if(!attempt.correct){db.prepare("UPDATE practice_streak_runs SET status='completed',current_puzzle_id=NULL,completed_at=CURRENT_TIMESTAMP WHERE id=?").run(runId);result={...attempt,ended:true};return;}
+    const score=Number(run.score||0)+1,next=pickStreakPuzzle(db,studentId,runId,score);
+    if(!next){db.prepare("UPDATE practice_streak_runs SET status='completed',score=?,current_puzzle_id=NULL,completed_at=CURRENT_TIMESTAMP WHERE id=?").run(score,runId);result={...attempt,ended:true};return;}
+    db.prepare('UPDATE practice_streak_runs SET score=?,current_puzzle_id=? WHERE id=?').run(score,next.id,runId);db.prepare('INSERT INTO practice_streak_items(run_id,sequence_no,puzzle_id) VALUES (?,?,?)').run(runId,score+1,next.id);result={...attempt,ended:false};
+  })();
+  return {...result,state:practiceStreakState(db,{studentId,runId})};
 }

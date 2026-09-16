@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.js';
 import {createStudent} from '../src/academic.js';
-import {seedPracticeBank,studentPracticeBank,recordPracticeBankAttempt} from '../src/practice-bank.js';
+import {seedPracticeBank,studentPracticeBank,recordPracticeBankAttempt,startPracticeStreak,submitPracticeStreakMove} from '../src/practice-bank.js';
 
 test('curated Lichess bank seeds and never exposes solutions to family payload',()=>{
   const db=openDatabase(':memory:');const seeded=seedPracticeBank(db);assert.ok(seeded.seeded>=250);
@@ -37,4 +37,12 @@ test('retrying the same puzzle does not change CIS puzzle rating twice',()=>{
   const miss=recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:first.id,answerMove:'a1a1'});assert.equal(miss.rated,true);
   const retry=recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:first.id,answerMove:solution});assert.equal(retry.correct,true);assert.equal(retry.rated,false);assert.equal(retry.ratingDelta,0);
   const profile=studentPracticeBank(db,student.id,{limit:1}).profile;assert.equal(profile.attempts,1);assert.equal(profile.correct,0);db.close();
+});
+
+test('Puzzle Streak advances on correct answer and ends on first miss',()=>{
+  const db=openDatabase(':memory:');seedPracticeBank(db);const student=createStudent(db,{displayName:'Streak Kid'});
+  const start=startPracticeStreak(db,{studentId:student.id});assert.equal(start.status,'in_progress');assert.equal(start.score,0);assert.ok(start.puzzle?.id);
+  const best=db.prepare('SELECT best_move AS bestMove FROM practice_bank_puzzles WHERE id=?').get(start.puzzle.id).bestMove;
+  const good=submitPracticeStreakMove(db,{studentId:student.id,runId:start.id,answerMove:best});assert.equal(good.correct,true);assert.equal(good.ended,false);assert.equal(good.state.score,1);assert.ok(good.state.puzzle?.id);
+  const bad=submitPracticeStreakMove(db,{studentId:student.id,runId:start.id,answerMove:'a1a1'});assert.equal(bad.correct,false);assert.equal(bad.ended,true);assert.equal(bad.state.status,'completed');assert.equal(bad.state.score,1);assert.equal(bad.state.best,1);db.close();
 });

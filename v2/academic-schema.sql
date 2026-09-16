@@ -566,6 +566,22 @@ CREATE TABLE IF NOT EXISTS student_practice_profiles (
 );
 CREATE INDEX IF NOT EXISTS idx_student_practice_rating ON student_practice_profiles(rating);
 
+CREATE TABLE IF NOT EXISTS practice_streak_runs (
+  id TEXT PRIMARY KEY,student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','completed','abandoned')),
+  score INTEGER NOT NULL DEFAULT 0,current_puzzle_id TEXT REFERENCES practice_bank_puzzles(id) ON DELETE SET NULL,
+  started_rating INTEGER NOT NULL,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS practice_streak_items (
+  run_id TEXT NOT NULL REFERENCES practice_streak_runs(id) ON DELETE CASCADE,
+  sequence_no INTEGER NOT NULL,puzzle_id TEXT NOT NULL REFERENCES practice_bank_puzzles(id) ON DELETE CASCADE,
+  attempt_id TEXT REFERENCES practice_bank_attempts(id) ON DELETE SET NULL,correct INTEGER CHECK(correct IN (0,1)),
+  PRIMARY KEY(run_id,sequence_no),UNIQUE(run_id,puzzle_id)
+);
+CREATE INDEX IF NOT EXISTS idx_practice_streak_student ON practice_streak_runs(student_id,status,started_at);
+CREATE INDEX IF NOT EXISTS idx_practice_streak_items_run ON practice_streak_items(run_id,sequence_no);
+
+
 
 CREATE VIEW IF NOT EXISTS v_public_league_accounts AS
 SELECT p.id,p.name,p.registration_status,p.availability,p.last_activity_at,a.platform,a.username,a.verified_at,a.verification_source
