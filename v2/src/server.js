@@ -43,6 +43,7 @@ import {syncAndAnalyzeAcademicGames} from './academic-game-sync.js';
 import {progressReportPreview,createProgressReportDraft,publishProgressReport,listProgressReports} from './progress-reports.js';
 import {createStaffAccount,loginStaffAccount,authenticateStaffSession,revokeStaffSession,listStaffAccounts,resetStaffPassword} from './staff-access.js';
 import {lessonTeachingPack,seedLessonResources} from './lesson-resources.js';
+import {submitPracticeMission,setPracticeMissionStatus} from './practice-plan.js';
 
 const app=express();
 const db=openDatabase();
@@ -79,6 +80,7 @@ app.post('/api/portal/login',(req,res)=>{
 app.get('/api/portal/me',portalOnly,(req,res)=>{const data=studentPortalDashboard(db,req.portalAuth.accountId);if(!data)return res.status(404).json({error:'portal account not found'});res.json(data);});
 app.get('/api/portal/students/:id/training-intelligence',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});const data=studentTrainingIntelligence(db,req.params.id,{locale:req.portalAuth.preferredLocale||'en'});res.json(data);});
 app.post('/api/portal/students/:id/puzzles/:puzzleId/attempt',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});try{res.json(recordPuzzleAttempt(db,{studentId:req.params.id,puzzleId:req.params.puzzleId,answerMove:req.body?.answerMove}));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/portal/students/:id/practice-missions/:assignmentId/submit',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});try{res.json(submitPracticeMission(db,{studentId:req.params.id,assignmentId:req.params.assignmentId}));}catch(error){res.status(400).json({error:error.message});}});
 app.patch('/api/portal/preferences',portalOnly,(req,res)=>{try{res.json(setPortalPreferredLocale(db,req.portalAuth.accountId,req.body?.preferredLocale));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/portal/students/:id/bot-arena',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});seedCisBots(db);res.json(cisBotCatalog(db,req.params.id,{locale:req.portalAuth.preferredLocale||'en'}));});
 app.post('/api/portal/students/:id/bot-challenges',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});try{res.status(201).json(startCisBotChallenge(db,{studentId:req.params.id,botCode:req.body?.botCode}));}catch(error){res.status(400).json({error:error.message});}});
@@ -198,6 +200,7 @@ app.get('/api/admin/students/:id/progress-reports',staffOnly,(req,res)=>res.json
 app.post('/api/admin/students/:id/progress-reports',staffOnly,(req,res)=>{try{res.status(201).json(createProgressReportDraft(db,req.params.id,{days:req.body?.days||30}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/progress-reports/:id/publish',staffOnly,(req,res)=>{try{res.json(publishProgressReport(db,req.params.id));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/students/:id/notes',staffOnly,(req,res)=>{try{res.status(201).json(addCoachNote(db,req.params.id,req.body));}catch(error){res.status(400).json({error:error.message});}});
+app.put('/api/admin/practice-missions/:id/status',staffOnly,(req,res)=>{try{res.json(setPracticeMissionStatus(db,{assignmentId:req.params.id,status:req.body?.status}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/season/readiness',adminOnly,(_q,res)=>res.json(Object.assign({control:getSeasonControl(db),compatibility:readiness()},buildReadinessDashboard(db))));
 app.get('/api/admin/rules',adminOnly,(_q,res)=>res.json(listLeagueRules(db)));
 app.put('/api/admin/rules/:key',adminOnly,(req,res)=>{try{res.json(updateLeagueRule(db,req.params.key,req.body?.value,{approved:req.body?.approved===true}));}catch(error){res.status(400).json({error:error.message});}});

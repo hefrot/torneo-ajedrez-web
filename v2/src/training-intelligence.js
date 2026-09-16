@@ -62,8 +62,8 @@ function recommendedLesson(db,skillId,locale='en'){
 }
 
 function leakSummary(db,studentId,locale='en'){
-  const rows=db.prepare(`SELECT f.skill_id AS skillId,f.finding_type AS findingType,COUNT(*) AS occurrences,ROUND(AVG(COALESCE(f.severity,1)),2) AS avgSeverity,MAX(f.created_at) AS lastSeen
-    FROM student_game_findings f WHERE f.student_id=? GROUP BY f.skill_id,f.finding_type ORDER BY (COUNT(*)*AVG(COALESCE(f.severity,1))) DESC,MAX(f.created_at) DESC`).all(studentId);
+  const rows=db.prepare(`SELECT f.skill_id AS skillId,cs.code AS skillCode,f.finding_type AS findingType,COUNT(*) AS occurrences,ROUND(AVG(COALESCE(f.severity,1)),2) AS avgSeverity,MAX(f.created_at) AS lastSeen
+    FROM student_game_findings f LEFT JOIN curriculum_skills cs ON cs.id=f.skill_id WHERE f.student_id=? GROUP BY f.skill_id,cs.code,f.finding_type ORDER BY (COUNT(*)*AVG(COALESCE(f.severity,1))) DESC,MAX(f.created_at) DESC`).all(studentId);
   return rows.map(row=>({
     ...row,
     skillTitle:skillTitle(db,row.skillId,locale),

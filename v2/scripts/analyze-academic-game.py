@@ -63,7 +63,11 @@ def load_game(payload):
         game = chess.pgn.read_game(io.StringIO(pgn))
         if game is None:
             raise ValueError("invalid PGN")
-        return game, game.headers.get("ECO"), game.headers.get("Opening")
+        opening = game.headers.get("Opening")
+        if not opening and game.headers.get("ECOUrl"):
+            slug = game.headers.get("ECOUrl").rstrip('/').split('/')[-1]
+            opening = slug.replace('-', ' ').replace('_', ' ').strip()
+        return game, game.headers.get("ECO"), opening
     fen = payload.get("initialFen") or chess.STARTING_FEN
     board = chess.Board(fen)
     game = chess.pgn.Game()

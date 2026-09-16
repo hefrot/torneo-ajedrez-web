@@ -98,7 +98,8 @@ export function studentProfile(db,studentId){
   const findings=db.prepare(`SELECT f.id,f.finding_type AS findingType,f.severity,f.note,f.fen_before AS fenBefore,f.move_played AS movePlayed,f.best_move AS bestMove,f.created_at AS createdAt,cs.title AS skillTitle FROM student_game_findings f LEFT JOIN curriculum_skills cs ON cs.id=f.skill_id WHERE f.student_id=? ORDER BY f.created_at DESC LIMIT 20`).all(studentId);
   const notes=db.prepare(`SELECT id,visibility,note,created_at AS createdAt FROM coach_notes WHERE student_id=? ORDER BY created_at DESC LIMIT 30`).all(studentId);
   const attendance=db.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) AS present,ROUND(AVG(comprehension_score),2) AS avgComprehension FROM attendance WHERE student_id=?`).get(studentId);
-  return {student,guardians,platformAccounts,enrollments,skills,assessments,findings,notes,attendance};
+  const assignments=db.prepare(`SELECT id,title,details,due_at AS dueAt,status,created_at AS createdAt FROM assignments WHERE student_id=? ORDER BY created_at DESC LIMIT 30`).all(studentId);
+  return {student,guardians,platformAccounts,enrollments,skills,assessments,findings,notes,attendance,assignments};
 }
 
 export function addCoachNote(db,studentId,input={}){
