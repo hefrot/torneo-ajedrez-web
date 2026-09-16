@@ -231,6 +231,11 @@ CREATE TABLE IF NOT EXISTS student_game_findings (
   skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
   finding_type TEXT NOT NULL,
   severity INTEGER CHECK(severity BETWEEN 1 AND 5),
+  engine_cp_loss INTEGER,
+  classifier_confidence REAL CHECK(classifier_confidence BETWEEN 0 AND 1),
+  classifier_source TEXT,
+  ply INTEGER,
+  move_number INTEGER,
   fen_before TEXT,
   move_played TEXT,
   best_move TEXT,
@@ -396,3 +401,31 @@ CREATE TABLE IF NOT EXISTS training_puzzle_attempts (
 CREATE INDEX IF NOT EXISTS idx_game_reviews_student_time ON student_game_reviews(student_id,played_at);
 CREATE INDEX IF NOT EXISTS idx_training_puzzles_student_status ON training_puzzles(student_id,status);
 CREATE INDEX IF NOT EXISTS idx_puzzle_attempts_student_time ON training_puzzle_attempts(student_id,attempted_at);
+
+CREATE TABLE IF NOT EXISTS academic_external_games (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  account_id TEXT NOT NULL REFERENCES player_accounts(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL CHECK(platform IN ('lichess','chesscom')),
+  external_game_id TEXT NOT NULL,
+  url TEXT,
+  played_at TEXT,
+  student_color TEXT CHECK(student_color IN ('white','black')),
+  student_result TEXT CHECK(student_result IN ('win','loss','draw','unknown')),
+  rated INTEGER CHECK(rated IN (0,1)),
+  time_class TEXT,
+  time_control TEXT,
+  opening_name TEXT,
+  opening_eco TEXT,
+  pgn TEXT,
+  moves_uci TEXT,
+  initial_fen TEXT,
+  analysis_status TEXT NOT NULL DEFAULT 'pending' CHECK(analysis_status IN ('pending','analyzed','failed','skipped')),
+  analysis_error TEXT,
+  analysis_version TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(account_id,external_game_id)
+);
+CREATE INDEX IF NOT EXISTS idx_academic_games_student_time ON academic_external_games(student_id,played_at);
+CREATE INDEX IF NOT EXISTS idx_academic_games_analysis ON academic_external_games(analysis_status,played_at);

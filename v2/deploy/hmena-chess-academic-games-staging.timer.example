@@ -1,0 +1,12 @@
+[Unit]
+Description=Run HMENA academic game sync every 6 hours (staging)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+RandomizedDelaySec=10min
+Unit=hmena-chess-academic-games-staging.service
+
+[Install]
+WantedBy=timers.target

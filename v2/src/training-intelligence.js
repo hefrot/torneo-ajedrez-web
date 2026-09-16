@@ -78,7 +78,7 @@ const copy={
   es:{noData:'Juega o vincula más partidas para construir tu perfil de entrenamiento.',focus:'Tu prioridad actual de entrenamiento es',puzzles:'problemas creados desde tus errores disponibles'}
 };
 
-export function studentTrainingIntelligence(db,studentId,{locale='en'}={}){
+export function studentTrainingIntelligence(db,studentId,{locale='en',includeTechnical=false}={}){
   const lang=normalizeLocale(locale);
   if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))return null;
   createPuzzlesFromFindings(db,studentId);
@@ -89,5 +89,6 @@ export function studentTrainingIntelligence(db,studentId,{locale='en'}={}){
   const activePuzzles=puzzles.filter(p=>p.status==='active').length;
   const top=leaks[0]||null;
   const coachInsight=top?`${copy[lang].focus} ${top.skillTitle||top.findingType}. ${top.occurrences}× · severity ${top.avgSeverity}/5.`:copy[lang].noData;
-  return {studentId,locale:lang,coachInsight,topLeaks:leaks.slice(0,8),puzzles,activePuzzles,reviews,openings:openingSummary(db,studentId),ratings:studentRatingProgress(db,studentId),summary:{findings:leaks.reduce((n,x)=>n+Number(x.occurrences),0),activePuzzles,reviewedGames:reviews.length}};
+  const recentFindings=includeTechnical?db.prepare(`SELECT f.id,f.source_game_id AS sourceGameId,f.finding_type AS findingType,f.severity,f.engine_cp_loss AS cpLoss,f.classifier_confidence AS classifierConfidence,f.classifier_source AS classifierSource,f.ply,f.move_number AS moveNumber,f.move_played AS movePlayed,f.best_move AS bestMove,f.created_at AS createdAt,f.skill_id AS skillId FROM student_game_findings f WHERE f.student_id=? ORDER BY f.created_at DESC LIMIT 30`).all(studentId).map(f=>({...f,skillTitle:skillTitle(db,f.skillId,lang)})):undefined;
+  return {studentId,locale:lang,coachInsight,topLeaks:leaks.slice(0,8),puzzles,activePuzzles,reviews,openings:openingSummary(db,studentId),ratings:studentRatingProgress(db,studentId),summary:{findings:leaks.reduce((n,x)=>n+Number(x.occurrences),0),activePuzzles,reviewedGames:reviews.length},...(includeTechnical?{recentFindings}:{})};
 }

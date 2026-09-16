@@ -1,0 +1,17 @@
+[Unit]
+Description=HMENA Chess academic game sync + analysis (staging)
+After=network-online.target hmena-chess-v2-staging.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/hmena-chess-v2-staging/v2
+EnvironmentFile=/etc/hmena-chess-v2-staging.env
+Environment=ACADEMIC_GAME_FETCH_LIMIT=30
+Environment=ACADEMIC_GAME_ANALYSIS_LIMIT=12
+ExecStart=/usr/bin/node scripts/sync-academic-games.mjs
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
