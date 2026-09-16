@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.js';
-import {createStudent} from '../src/academic.js';
+import {createStudent,createProgram,enrollStudent} from '../src/academic.js';
 import {seedHmenaFramework,placeStudentInHmena,setHmenaSkillStatus} from '../src/hmena-curriculum.js';
 import {seedCurriculumLocalizations} from '../src/curriculum-localization.js';
 import {seedHmenaCourse0800} from '../src/hmena-course.js';
@@ -57,4 +57,13 @@ test('introduced prerequisites allow progression while remaining visible for lat
   for(const code of ['FND-BOARD','FND-PIECES','FND-PAWNS','FND-LEGAL','FND-CHECK','FND-CBR','FND-MATE1'])setHmenaSkillStatus(db,{studentId:student.id,skillCode:code,status:'introduced',confidence:50});
   const rec=nextLessonRecommendation(db,student.id,{locale:'en'});
   assert.equal(rec.recommendation.skill.code,'FND-OPENING');db.close();
+});
+test('coach can approve and explicitly assign the plan to the next private session',()=>{
+  const {db,student}=setup('hmena-0-400');
+  const program=createProgram(db,{name:'Private Chess',programType:'private'});enrollStudent(db,{programId:program.id,studentId:student.id});
+  db.prepare("INSERT INTO class_sessions(id,program_id,starts_at,duration_minutes,status) VALUES ('SES-NEXT',?,'2099-01-10T17:00:00',60,'scheduled')").run(program.id);
+  setHmenaSkillStatus(db,{studentId:student.id,skillCode:'FND-BOARD',status:'practicing'});
+  const decision=recordCoachLessonDecision(db,{studentId:student.id,decision:'accepted',assignToNextPrivateSession:true,locale:'en'});
+  assert.equal(decision.assignment.assigned,true);assert.equal(decision.assignment.id,'SES-NEXT');
+  const planned=db.prepare("SELECT lesson_id AS lessonId FROM session_lessons WHERE session_id='SES-NEXT'").get();assert.equal(planned.lessonId,decision.selected.lesson.id);db.close();
 });

@@ -109,6 +109,10 @@ function ratingContext(db,studentId){
   const ratings=studentRatingProgress(db,studentId);const series=ratings?.series||[];
   return series.map(s=>({platform:s.platform,ratingType:s.ratingType,first:s.firstRating,latest:s.latestRating,delta:s.delta,days:s.points.length}));
 }
+function nextPrivateSession(db,studentId){
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  return db.prepare(`SELECT cs.id,cs.starts_at AS startsAt,p.id AS programId,p.name AS programName FROM enrollments e JOIN programs p ON p.id=e.program_id JOIN class_sessions cs ON cs.program_id=p.id WHERE e.student_id=? AND e.status='active' AND p.program_type='private' AND cs.status='scheduled' AND substr(cs.starts_at,1,10)>=? ORDER BY cs.starts_at LIMIT 1`).get(studentId,today)||null;
+}
 function latestClassContext(db,studentId){
   return db.prepare(`SELECT cs.starts_at AS startsAt,l.id AS lessonId,l.title,a.status,a.comprehension_score AS comprehension FROM attendance a JOIN class_sessions cs ON cs.id=a.session_id LEFT JOIN session_lessons sl ON sl.session_id=cs.id LEFT JOIN lessons l ON l.id=sl.lesson_id WHERE a.student_id=? ORDER BY cs.starts_at DESC LIMIT 5`).all(studentId);
 }
@@ -147,16 +151,16 @@ function formatCandidate(db,candidate,locale){
 export function nextLessonRecommendation(db,studentId,{locale='en'}={}){
   const lang=normalizeLocale(locale);const student=db.prepare('SELECT id,display_name AS displayName FROM students WHERE id=?').get(studentId);if(!student)return null;
   const placement=getHmenaPlacement(db,studentId);
-  if(!placement)return {student,locale:lang,kind:'diagnostic',placement:null,recommendation:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId)},message:lang==='es'?'Primero completa el diagnóstico HMENA para recomendar una clase.':'Complete the HMENA diagnostic before recommending a lesson.'};
+  if(!placement)return {student,locale:lang,kind:'diagnostic',placement:null,recommendation:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),nextPrivateSession:nextPrivateSession(db,studentId)},message:lang==='es'?'Primero completa el diagnóstico HMENA para recomendar una clase.':'Complete the HMENA diagnostic before recommending a lesson.'};
   const map=seedCandidates(db,studentId,placement);for(const c of map.values())addStatusReason(c);
   applyGameEvidence(db,map,studentId);applyPuzzleEvidence(db,map,studentId);applyClassEvidence(db,map,studentId);applyDiagnosticEvidence(db,map,studentId);
   const opening=applyOpeningEvidence(db,map,studentId,placement,lang);propagateBlockedEvidence(db,map,studentId,placement);
   const ranked=[...map.values()].filter(c=>c.score>0&&candidateReady(db,studentId,c,placement)).sort((a,b)=>b.score-a.score||a.sequenceNo-b.sequenceNo);
-  if(!ranked.length){const lesson=assessmentLesson(db,placement.bandCode,lang);return {student,locale:lang,kind:'assessment',placement,recommendation:lesson?{skill:null,lesson,score:0,confidence:80,action:'assess',reasons:[]}:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),opening},message:lang==='es'?'Las habilidades de la banda están sólidas; conviene reevaluar para avanzar.':'Band skills are secure; reassess for advancement.'};}
+  if(!ranked.length){const lesson=assessmentLesson(db,placement.bandCode,lang);return {student,locale:lang,kind:'assessment',placement,recommendation:lesson?{skill:null,lesson,score:0,confidence:80,action:'assess',reasons:[]}:null,alternatives:[],context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),opening,nextPrivateSession:nextPrivateSession(db,studentId)},message:lang==='es'?'Las habilidades de la banda están sólidas; conviene reevaluar para avanzar.':'Band skills are secure; reassess for advancement.'};}
   const formatted=ranked.slice(0,4).map(c=>formatCandidate(db,c,lang));
-  return {student,locale:lang,kind:'lesson',placement,recommendation:formatted[0],alternatives:formatted.slice(1),context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),opening},algorithmVersion:NEXT_LESSON_VERSION};
+  return {student,locale:lang,kind:'lesson',placement,recommendation:formatted[0],alternatives:formatted.slice(1),context:{ratings:ratingContext(db,studentId),recentClasses:latestClassContext(db,studentId),opening,nextPrivateSession:nextPrivateSession(db,studentId)},algorithmVersion:NEXT_LESSON_VERSION};
 }
-export function recordCoachLessonDecision(db,{studentId,decision='accepted',selectedSkillCode=null,selectedLessonId=null,coachNote=null,locale='en'}={}){
+export function recordCoachLessonDecision(db,{studentId,decision='accepted',selectedSkillCode=null,selectedLessonId=null,coachNote=null,locale='en',assignToNextPrivateSession=false}={}){
   if(!['accepted','overridden','dismissed'].includes(decision))throw new TypeError('invalid decision');
   const rec=nextLessonRecommendation(db,studentId,{locale});if(!rec)throw new TypeError('student not found');
   const recommended=rec.recommendation;let selectedSkillId=recommended?.skill?.id||null,selectedLesson=recommended?.lesson||null;
@@ -168,7 +172,9 @@ export function recordCoachLessonDecision(db,{studentId,decision='accepted',sele
   if(decision==='dismissed'){selectedSkillId=null;selectedLesson=null;}
   const id=`CLD-${randomUUID()}`;
   db.prepare(`INSERT INTO coach_lesson_decisions(id,student_id,recommended_skill_id,recommended_lesson_id,selected_skill_id,selected_lesson_id,algorithm_version,recommendation_score,confidence,reasons_json,context_json,decision,coach_note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id,studentId,recommended?.skill?.id||null,recommended?.lesson?.id||null,selectedSkillId,selectedLesson?.id||null,NEXT_LESSON_VERSION,recommended?.score??null,recommended?.confidence??null,JSON.stringify(recommended?.reasons||[]),JSON.stringify(rec.context||{}),decision,coachNote||null);
-  return {id,studentId,decision,recommended,selected:{skillId:selectedSkillId,lesson:selectedLesson},coachNote:coachNote||null};
+  let assignment=null;
+  if(assignToNextPrivateSession&&decision!=='dismissed'&&selectedLesson?.id){const session=nextPrivateSession(db,studentId);if(session){const planned=db.prepare('SELECT COUNT(*) AS n FROM session_lessons WHERE session_id=?').get(session.id).n;if(!planned){db.prepare(`INSERT INTO session_lessons(session_id,lesson_id,sequence_no,delivery_stage) VALUES (?,?,1,'theory_only')`).run(session.id,selectedLesson.id);assignment={assigned:true,...session,lessonId:selectedLesson.id};}else assignment={assigned:false,reason:'session_already_planned',...session};}}
+  return {id,studentId,decision,recommended,selected:{skillId:selectedSkillId,lesson:selectedLesson},coachNote:coachNote||null,assignment};
 }
 
 export function latestApprovedPlan(db,studentId,{locale='en'}={}){
