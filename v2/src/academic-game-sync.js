@@ -4,10 +4,13 @@ import {recordStudentGameReview,createPuzzlesFromFindings} from './training-inte
 const norm=value=>String(value||'').trim().toLowerCase();
 const stableId=value=>createHash('sha256').update(String(value)).digest('hex').slice(0,24);
 const isoFromMs=value=>Number.isFinite(Number(value))?new Date(Number(value)).toISOString():null;
-const accountRows=db=>db.prepare(`SELECT s.id AS studentId,pa.id AS accountId,pa.player_id AS playerId,pa.platform,pa.username
+const accountRows=(db,{studentId=null}={})=>{
+  const sql=`SELECT s.id AS studentId,pa.id AS accountId,pa.player_id AS playerId,pa.platform,pa.username
   FROM students s JOIN player_accounts pa ON pa.player_id=s.player_id
-  WHERE s.status='active' AND pa.account_status='verified' AND pa.verified_at IS NOT NULL
-  ORDER BY pa.platform,pa.username`).all();
+  WHERE s.status='active' AND pa.account_status='verified' AND pa.verified_at IS NOT NULL${studentId?' AND s.id=?':''}
+  ORDER BY pa.platform,pa.username`;
+  return studentId?db.prepare(sql).all(studentId):db.prepare(sql).all();
+};
 
 function lichessName(side={}){
   return norm(side?.userId||side?.user?.id||side?.user?.name||side?.name);
@@ -60,8 +63,8 @@ const lastPlayedMs=(db,accountId)=>{
   const ms=value?Date.parse(value):NaN;return Number.isFinite(ms)?ms:null;
 };
 
-export async function syncAcademicGameMetadata(db,{lichessClient,chessComClient,maxPerAccount=30,months=2}={}){
-  const accounts=accountRows(db);let fetched=0,created=0,updated=0,errors=0;
+export async function syncAcademicGameMetadata(db,{lichessClient,chessComClient,maxPerAccount=30,months=2,studentId=null}={}){
+  const accounts=accountRows(db,{studentId});let fetched=0,created=0,updated=0,errors=0;
   for(const account of accounts){
     try{
       let games=[];
@@ -101,9 +104,11 @@ function persistAnalysis(db,game,analysis){
   return findings;
 }
 
-export async function analyzePendingAcademicGames(db,{analyzeGame,limit=12}={}){
+export async function analyzePendingAcademicGames(db,{analyzeGame,limit=12,studentId=null}={}){
   if(typeof analyzeGame!=='function')throw new TypeError('analyzeGame is required');
-  const games=db.prepare(`SELECT * FROM academic_external_games WHERE analysis_status='pending' AND student_color IS NOT NULL AND (pgn IS NOT NULL OR moves_uci IS NOT NULL) ORDER BY COALESCE(played_at,created_at) DESC LIMIT ?`).all(Math.max(1,Math.min(100,Number(limit)||12)));
+  const cap=Math.max(1,Math.min(100,Number(limit)||12));
+  const sql=`SELECT * FROM academic_external_games WHERE analysis_status='pending' AND student_color IS NOT NULL AND (pgn IS NOT NULL OR moves_uci IS NOT NULL)${studentId?' AND student_id=?':''} ORDER BY COALESCE(played_at,created_at) DESC LIMIT ?`;
+  const games=studentId?db.prepare(sql).all(studentId,cap):db.prepare(sql).all(cap);
   let analyzed=0,findings=0,failed=0;
   for(const game of games){
     try{
@@ -118,6 +123,6 @@ export async function analyzePendingAcademicGames(db,{analyzeGame,limit=12}={}){
 
 export async function syncAndAnalyzeAcademicGames(db,options={}){
   const sync=await syncAcademicGameMetadata(db,options);
-  const analysis=await analyzePendingAcademicGames(db,{analyzeGame:options.analyzeGame,limit:options.analysisLimit||12});
+  const analysis=await analyzePendingAcademicGames(db,{analyzeGame:options.analyzeGame,limit:options.analysisLimit||12,studentId:options.studentId||null});
   return {sync,analysis};
 }

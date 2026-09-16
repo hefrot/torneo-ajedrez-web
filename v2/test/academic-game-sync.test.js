@@ -48,3 +48,19 @@ test('severe Rapid finding can regress mastered skill while Bullet cannot',async
   db.prepare("INSERT INTO academic_external_games(id,student_id,account_id,platform,external_game_id,played_at,student_color,student_result,time_class,pgn,analysis_status) VALUES ('AG3B',?,'A3','lichess','gb','2026-09-15T17:00:00Z','white','loss','bullet','[Result \"*\"]\n\n*','pending')").run(student.id);await analyzePendingAcademicGames(db,{analyzeGame:analyzer});assert.equal(db.prepare('SELECT status FROM student_skills WHERE student_id=? AND skill_id=?').get(student.id,skill.id).status,'drill_mastered');
   db.prepare("INSERT INTO academic_external_games(id,student_id,account_id,platform,external_game_id,played_at,student_color,student_result,time_class,pgn,analysis_status) VALUES ('AG3R',?,'A3','lichess','gr','2026-09-15T18:00:00Z','white','loss','rapid','[Result \"*\"]\n\n*','pending')").run(student.id);await analyzePendingAcademicGames(db,{analyzeGame:analyzer});assert.equal(db.prepare('SELECT status FROM student_skills WHERE student_id=? AND skill_id=?').get(student.id,skill.id).status,'regressed');db.close();
 });
+
+test('student-scoped sync only touches the selected student',async()=>{
+  const db=openDatabase(':memory:');seedHmenaCourse0800(db);
+  const ids=[];
+  for(const [p,a,u] of [['PX1','AX1','KidOne'],['PX2','AX2','KidTwo']]){
+    db.prepare("INSERT INTO players(id,name,platform,username,registration_status) VALUES (?,?, 'lichess',?,'academic_only')").run(p,u,u);
+    const student=createStudent(db,{displayName:u,playerId:p});ids.push(student.id);
+    db.prepare("INSERT INTO player_accounts(id,player_id,platform,username,username_normalized,account_status,source_system,source_record_id,verification_source,verified_at,source_sha256) VALUES (?,?, 'lichess',?,?, 'verified','test',?,'test','2026-01-01','x')").run(a,p,u,u.toLowerCase(),a);
+  }
+  const lichessClient={getGames:async username=>[{id:`g-${username}`,rated:true,speed:'rapid',createdAt:1000,lastMoveAt:2000,winner:'white',moves:'e2e4 e7e5',players:{white:{userId:username},black:{userId:'Other'}}}]};
+  const result=await syncAcademicGameMetadata(db,{lichessClient,studentId:ids[0]});
+  assert.equal(result.accounts,1);assert.equal(result.created,1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM academic_external_games WHERE student_id=?').get(ids[0]).n,1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM academic_external_games WHERE student_id=?').get(ids[1]).n,0);
+  db.close();
+});

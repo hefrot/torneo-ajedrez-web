@@ -39,6 +39,7 @@ import {studentOpeningProfile} from './opening-trainer.js';
 import {seedCisBots,cisBotCatalog,startCisBotChallenge,startCisBotGame,playCisBotMove} from './cis-bot-arena.js';
 import {cisBotMove} from './cis-bot-engine.js';
 import {analyzeAcademicGame} from './stockfish-analysis.js';
+import {syncAndAnalyzeAcademicGames} from './academic-game-sync.js';
 import {progressReportPreview,createProgressReportDraft,publishProgressReport,listProgressReports} from './progress-reports.js';
 import {createStaffAccount,loginStaffAccount,authenticateStaffSession,revokeStaffSession,listStaffAccounts,resetStaffPassword} from './staff-access.js';
 import {lessonTeachingPack,seedLessonResources} from './lesson-resources.js';
@@ -169,6 +170,12 @@ app.post('/api/admin/students/:id/platform-accounts/verify',staffOnly,async(req,
   }catch{}
   res.status(201).json({...linked,initialRatingsCaptured});
 }catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
+app.post('/api/admin/students/:id/sync-games',staffOnly,async(req,res,next)=>{try{
+  const student=db.prepare('SELECT id FROM students WHERE id=? AND status!=\'archived\'').get(req.params.id);if(!student)return res.status(404).json({error:'student not found'});
+  let chessComClient=null;try{chessComClient=new ChessComClient();}catch{}
+  const result=await syncAndAnalyzeAcademicGames(db,{studentId:req.params.id,lichessClient:new LichessClient(),chessComClient,analyzeGame:analyzeAcademicGame,maxPerAccount:Math.max(1,Math.min(50,Number(req.body?.maxPerAccount)||30)),analysisLimit:Math.max(1,Math.min(30,Number(req.body?.analysisLimit)||12)),months:Math.max(1,Math.min(12,Number(req.body?.months)||2))});
+  res.json(result);
+}catch(error){next(error);}});
 app.get('/api/admin/students/:id/rating-progress',staffOnly,(req,res)=>{const data=studentRatingProgress(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students/:id/training-intelligence',staffOnly,(req,res)=>{const data=studentTrainingIntelligence(db,req.params.id,{locale:req.query?.locale||'en',includeTechnical:true});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students/:id/opening-trainer',staffOnly,(req,res)=>{const data=studentOpeningProfile(db,req.params.id,{locale:req.query?.locale||'en'});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
