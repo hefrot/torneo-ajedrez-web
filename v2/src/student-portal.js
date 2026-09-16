@@ -6,6 +6,7 @@ import {studentTrainingIntelligence} from './training-intelligence.js';
 import {latestApprovedPlan} from './next-lesson-engine.js';
 import {studentOpeningProfile} from './opening-trainer.js';
 import {cisBotCatalog} from './cis-bot-arena.js';
+import {familyJourney} from './family-journey.js';
 import {syncPracticeMissions} from './practice-plan.js';
 
 export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
@@ -27,6 +28,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     nextPlan:(()=>{const plan=latestApprovedPlan(db,student.id,{locale});return plan?{id:plan.id,decision:plan.decision,lesson:plan.lesson,skill:plan.skill,createdAt:plan.createdAt}:null;})(),
     openingTrainer:studentOpeningProfile(db,student.id,{locale}),
     botArena:cisBotCatalog(db,student.id,{locale}),
+    journey:familyJourney(db,student.id,{locale}),
     upcoming:upcomingStmt.all(student.id,at),
     assignments,
     practiceMissions,

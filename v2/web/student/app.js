@@ -88,14 +88,17 @@ function practiceMissionCards(s){
   return missions.map(m=>{const done=m.status==='completed',submitted=m.status==='submitted';return `<article class="practice-mission ${done?'done':''} ${submitted?'submitted':''}"><div class="practice-source"><span>♞</span><small>${t('externalPractice')}</small></div><strong>${esc(m.title)}</strong><p>${esc(m.description)}</p><div class="practice-actions"><a class="btn btn-secondary practice-open" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t('openPractice')} ↗</a>${done?`<span class="mission-status status-ok">✓ ${t('coachConfirmed')}</span>`:submitted?`<span class="mission-status status-warn">✓ ${t('reportedDone')}</span>`:`<button class="btn btn-secondary submit-practice" data-student-id="${esc(s.id)}" data-assignment-id="${esc(m.id)}" type="button">${t('markDone')}</button>`}</div></article>`;}).join('');
 }
 function milestoneStrip(s){
-  const linked=(s.ratings?.accounts?.length||0)>0,assessed=Boolean(s.placement),practice=(s.training?.puzzles||[]).some(x=>x.status==='mastered')||(s.practiceMissions||[]).some(x=>['submitted','completed'].includes(x.status)),coachPlan=Boolean(s.nextPlan);
-  const rows=[[linked,t('linked')],[assessed,t('assessed')],[practice,t('practiceStep')],[coachPlan,t('coachPlanStep')]];
-  return `<div class="journey-steps">${rows.map(([ok,label],i)=>`<div class="journey-step ${ok?'done':''}"><span>${ok?'✓':i+1}</span><small>${label}</small></div>`).join('')}</div>`;
+  const j=s.journey;if(!j?.steps?.length)return '';
+  return `<div class="journey-wrap"><div class="journey-progress-head"><strong>${j.completed}/${j.total}</strong><span>${t('milestones')}</span><small>${j.percent}%</small></div><div class="journey-progress"><span style="width:${Math.max(0,Math.min(100,j.percent))}%"></span></div><div class="journey-steps">${j.steps.map(step=>`<div class="journey-step ${step.complete?'done':''}"><span>${step.complete?'✓':step.index}</span><small>${esc(step.title)}</small></div>`).join('')}</div></div>`;
 }
 function assessmentCta(s){
-  const band=s.placement?.bandCode;if(band&& !['hmena-0-400','hmena-400-800','hmena-800-1200'].includes(band))return '';
-  const level=band==='hmena-800-1200'?'1200':'0800',title=level==='1200'?t('diagnostic1200'):(locale==='es'?`Encontrar el nivel CIS inicial de ${esc(s.displayName)}`:`Find ${esc(s.displayName)}’s starting CIS level`);
-  return `<div class="family-mission-card"><div><span class="eyebrow">${t('todayMission')}</span><h3>${esc(title)}</h3><p>${t('assessmentHelp')}</p></div><button class="btn btn-primary start-diagnostic" data-student-id="${esc(s.id)}" data-diagnostic-level="${level}" type="button">${t('startLevelCheck')}</button></div>`;
+  const j=s.journey,mission=j?.mission;if(!mission)return '';
+  const band=s.placement?.bandCode,level=band==='hmena-800-1200'?'1200':'0800';
+  let action='';
+  if(mission.kind==='assessment')action=`<button class="btn btn-primary start-diagnostic" data-student-id="${esc(s.id)}" data-diagnostic-level="${level}" type="button">${t('startLevelCheck')}</button>`;
+  else if(mission.kind==='practice')action=`<button class="btn btn-primary journey-scroll" data-scroll-target="practice-${esc(s.id)}" type="button">${locale==='es'?'Ir a práctica':'Go to practice'}</button>`;
+  else if(mission.kind==='bot')action=`<button class="btn btn-primary journey-scroll" data-scroll-target="bot-${esc(s.id)}" type="button">${locale==='es'?'Ir al reto':'Go to challenge'}</button>`;
+  return `<div class="family-mission-card"><div><span class="eyebrow">${t('todayMission')}</span><h3>${esc(mission.title)}</h3><p>${esc(mission.description)}</p>${j.activity?`<small class="mission-activity">${j.activity.correctPuzzles7d} ${locale==='es'?'puzzles correctos esta semana':'correct puzzles this week'} · ${j.activity.botGames7d} ${locale==='es'?'partidas bot':'bot games'}</small>`:''}</div>${action}</div>`;
 }
 function botArenaBlock(arena,studentId,placement){
   if(!arena?.bots?.length)return '';
@@ -119,8 +122,8 @@ function studentCard(s){
     ${assessmentCta(s)}
     <section class="family-section"><div class="family-section-head"><div><span>${t('currentSnapshot')}</span><h3>${t('recentRecord')}</h3></div></div><div class="family-metrics"><article><strong>${reviewed}</strong><span>${t('gamesReviewed')}</span></article><article><strong>${puzzleCount}</strong><span>${t('personalPuzzles')}</span></article><article><strong>${record.text}</strong><span>${record.total} ${t('gamesReviewed').toLowerCase()}</span></article><article><strong>${nextClass?formatClassTime(nextClass.startsAt):'—'}</strong><span>${t('nextClass')}</span></article></div></section>
     <section class="family-section"><div class="family-section-head"><div><span>${t('workOn')}</span><h3>${locale==='es'?'3 prioridades claras':'3 clear priorities'}</h3></div><small>${t('technicalHidden')}</small></div><div class="focus-grid">${priorities}</div></section>
-    <section class="family-section practice-lab"><div class="family-section-head"><div><span>${t('practiceLab')}</span><h3>${t('practiceIntro')}</h3></div><small>${t('trackingNote')}</small></div><div class="practice-grid">${practiceMissionCards(s)}</div><h4>${t('mistakePuzzles')}</h4><div class="puzzle-grid">${puzzles}</div></section>
-    <section class="family-section"><div class="family-section-head"><div><span>${t('botArena')}</span><h3>${t('botHelp')}</h3></div></div>${botArenaBlock(s.botArena,s.id,s.placement)}</section>
+    <section class="family-section practice-lab" id="practice-${esc(s.id)}"><div class="family-section-head"><div><span>${t('practiceLab')}</span><h3>${t('practiceIntro')}</h3></div><small>${t('trackingNote')}</small></div><div class="practice-grid">${practiceMissionCards(s)}</div><h4>${t('mistakePuzzles')}</h4><div class="puzzle-grid">${puzzles}</div></section>
+    <section class="family-section" id="bot-${esc(s.id)}"><div class="family-section-head"><div><span>${t('botArena')}</span><h3>${t('botHelp')}</h3></div></div>${botArenaBlock(s.botArena,s.id,s.placement)}</section>
     <section class="family-section">${nextPlan}</section>
     <details class="family-details"><summary>${t('allRatings')}</summary><div class="rating-grid">${ratingCards(s.ratings)}</div></details>
     <details class="family-details"><summary>${t('openingsTitle')}</summary>${openingTrainerBlock(s.openingTrainer)}</details>
@@ -200,6 +203,7 @@ document.querySelectorAll('[data-locale]').forEach(button=>button.addEventListen
 $('#locale-select').addEventListener('change',async event=>{locale=event.target.value;try{await saveLocale();}catch(e){$('#portal-error').textContent=e.message;}});
 $('#login-form').addEventListener('submit',async event=>{event.preventDefault();$('#portal-error').textContent='';const payload=Object.fromEntries(new FormData(event.target).entries());try{const result=await api('../api/portal/login',{method:'POST',body:JSON.stringify(payload)});token=result.sessionToken;localStorage.setItem('hmena_student_session',token);if(result.account?.preferredLocale!==locale)await api('../api/portal/preferences',{method:'PATCH',body:JSON.stringify({preferredLocale:locale})});event.target.reset();await loadPortal();}catch(e){$('#portal-error').textContent=e.message;}});
 document.addEventListener('click',async event=>{
+  const journeyScroll=event.target.closest('.journey-scroll');if(journeyScroll){document.getElementById(journeyScroll.dataset.scrollTarget)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
   const submitPractice=event.target.closest('.submit-practice');if(submitPractice){try{await api(`../api/portal/students/${encodeURIComponent(submitPractice.dataset.studentId)}/practice-missions/${encodeURIComponent(submitPractice.dataset.assignmentId)}/submit`,{method:'POST',body:JSON.stringify({})});await loadPortal();}catch(e){$('#portal-error').textContent=e.message;}return;}
   const startBot=event.target.closest('.start-bot-challenge');if(startBot){try{await openBotChallenge(startBot.dataset.studentId,startBot.dataset.botCode);}catch(e){$('#portal-error').textContent=e.message;}return;}
   const nextBot=event.target.closest('.next-bot-game');if(nextBot){try{await startBotGame();}catch(e){$('#portal-error').textContent=e.message;}return;}
