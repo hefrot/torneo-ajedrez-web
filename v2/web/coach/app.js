@@ -1,17 +1,20 @@
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let key=sessionStorage.getItem('hmena_chess_admin_key')||'';
+let staffToken=localStorage.getItem('hmena_staff_session')||'';
+let staffAccount=null;
 let dashboardData=null;
 let activeStudentId=null;
 let activeProgramId=null;
-$('#admin-key').value=key;
 
 async function api(path,options={}){
-  const response=await fetch(path,{...options,headers:{'x-admin-key':key,...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});
+  const headers={...(staffToken?{Authorization:`Bearer ${staffToken}`}:{}) ,...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})};
+  const response=await fetch(path,{...options,headers});
   const data=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
   return data;
 }
+function applyStaffState(){const logged=Boolean(staffToken&&staffAccount);$('#staff-login-form').hidden=logged;$('#reload').hidden=!logged;$('#staff-logout').hidden=!logged;$('#staff-badge').hidden=!logged;$('#staff-badge').textContent=logged?`${staffAccount.displayName} · ${staffAccount.role}`:'';if(!logged)$('#dashboard').hidden=true;}
+async function restoreStaffSession(){if(!staffToken){applyStaffState();return;}try{const me=await api('../api/staff/me');staffAccount=me.account;applyStaffState();await load();}catch{staffToken='';staffAccount=null;localStorage.removeItem('hmena_staff_session');applyStaffState();}}
 function attendanceRow(sessionId,student){
   const a=student.attendance||{};
   return `<div class="attendance-row" data-student-id="${esc(student.id)}">
@@ -143,6 +146,7 @@ document.addEventListener('click',async event=>{
 $('#platform-form').addEventListener('submit',async event=>{event.preventDefault();if(!activeStudentId)return;const payload=Object.fromEntries(new FormData(event.target).entries());try{await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/platform-accounts/verify`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();await openStudent(activeStudentId);}catch(e){$('#error').textContent=e.message;}});
 $('#portal-access-form').addEventListener('submit',async event=>{event.preventDefault();if(!activeStudentId)return;const payload=Object.fromEntries(new FormData(event.target).entries());try{const result=await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/portal-access`,{method:'POST',body:JSON.stringify(payload)});$('#portal-credentials').innerHTML=`<strong>Usuario:</strong> ${esc(result.loginName)}<br><strong>Código:</strong> ${esc(result.accessCode)}<br><small>Guárdalo ahora: el código solo se muestra una vez.</small>`;}catch(e){$('#error').textContent=e.message;}});
 $('#note-form').addEventListener('submit',async event=>{event.preventDefault();if(!activeStudentId)return;const payload=Object.fromEntries(new FormData(event.target).entries());try{await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/notes`,{method:'POST',body:JSON.stringify(payload)});event.target.reset();await openStudent(activeStudentId);}catch(e){$('#error').textContent=e.message;}});
-$('#save-key').onclick=()=>{key=$('#admin-key').value.trim();sessionStorage.setItem('hmena_chess_admin_key',key);load().catch(e=>$('#error').textContent=e.message)};
+$('#staff-login-form').addEventListener('submit',async event=>{event.preventDefault();$('#error').textContent='';const payload=Object.fromEntries(new FormData(event.target).entries());try{const result=await api('../api/staff/login',{method:'POST',body:JSON.stringify(payload)});staffToken=result.sessionToken;staffAccount=result.account;localStorage.setItem('hmena_staff_session',staffToken);event.target.reset();applyStaffState();await load();}catch(e){$('#error').textContent=e.message;}});
+$('#staff-logout').onclick=async()=>{try{await api('../api/staff/logout',{method:'POST',body:JSON.stringify({})});}catch{}staffToken='';staffAccount=null;localStorage.removeItem('hmena_staff_session');applyStaffState();$('#date').textContent='Inicia sesión para continuar.';};
 $('#reload').onclick=()=>load().catch(e=>$('#error').textContent=e.message);
-if(key)load().catch(e=>$('#error').textContent=e.message);
+applyStaffState();restoreStaffSession();

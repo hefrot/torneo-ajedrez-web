@@ -471,6 +471,29 @@ CREATE TABLE IF NOT EXISTS coach_lesson_decisions (
 CREATE INDEX IF NOT EXISTS idx_coach_lesson_decisions_student_time ON coach_lesson_decisions(student_id,created_at);
 
 
+
+CREATE TABLE IF NOT EXISTS staff_accounts (
+  id TEXT PRIMARY KEY,
+  login_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('admin','coach')),
+  password_salt TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','revoked')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS staff_sessions (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  last_used_at TEXT,
+  revoked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_staff_sessions_account ON staff_sessions(account_id,revoked_at,expires_at);
+
 CREATE TABLE IF NOT EXISTS cis_bot_profiles (
   id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name_en TEXT NOT NULL, name_es TEXT NOT NULL,
   target_level INTEGER NOT NULL, sequence_no INTEGER NOT NULL, config_json TEXT NOT NULL DEFAULT '{}',

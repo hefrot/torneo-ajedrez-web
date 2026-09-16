@@ -254,6 +254,21 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'staff-auth-v16',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS staff_accounts (
+        id TEXT PRIMARY KEY,login_name TEXT NOT NULL UNIQUE COLLATE NOCASE,display_name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('admin','coach')),password_salt TEXT NOT NULL,password_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','revoked')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS staff_sessions (
+        id TEXT PRIMARY KEY,account_id TEXT NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,expires_at TEXT NOT NULL,last_used_at TEXT,revoked_at TEXT);
+      CREATE INDEX IF NOT EXISTS idx_staff_sessions_account ON staff_sessions(account_id,revoked_at,expires_at);`);
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

@@ -12,11 +12,15 @@
   <div class="shell coach-shell">
     <nav class="topbar">
       <a class="brand" href="../"><span class="brand-mark">♞</span><span>HMENA Chess<small>COACH DASHBOARD</small></span></a>
-      <button id="reload" class="btn btn-secondary">Actualizar</button>
+      <div class="inline-editor"><span id="staff-badge" class="status-badge" hidden></span><button id="reload" class="btn btn-secondary" hidden>Actualizar</button><button id="staff-logout" class="btn btn-secondary" hidden>Cerrar sesión</button></div>
     </nav>
     <header class="coach-hero">
-      <div><span class="eyebrow">Centro operativo</span><h1>Hoy</h1><p id="date">Cargando...</p></div>
-      <div class="coach-key"><label>Admin key<input id="admin-key" class="field" type="password" placeholder="Solo staging"></label><button id="save-key" class="btn btn-primary">Entrar</button></div>
+      <div><span class="eyebrow">Centro operativo</span><h1>Hoy</h1><p id="date">Inicia sesión para continuar.</p></div>
+      <form id="staff-login-form" class="coach-key">
+        <label>Usuario<input name="loginName" class="field" autocomplete="username" required></label>
+        <label>Contraseña<input name="password" class="field" type="password" autocomplete="current-password" required></label>
+        <button class="btn btn-primary" type="submit">Entrar</button>
+      </form>
     </header>
     <section id="dashboard" hidden>
       <div class="stat-grid" id="summary"></div>
