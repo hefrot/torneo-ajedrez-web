@@ -28,6 +28,7 @@ import {createPortalAccount,loginPortalAccount,authenticatePortalSession,regener
 import {studentPortalDashboard} from './student-portal.js';
 import {studentRatingProgress} from './rating-tracking.js';
 import {linkStudentVerifiedAccount} from './student-platform-link.js';
+import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from './training-intelligence.js';
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
 import {course0800Overview} from './hmena-course.js';
 
@@ -59,6 +60,8 @@ app.post('/api/portal/login',(req,res)=>{
   res.json(result);
 });
 app.get('/api/portal/me',portalOnly,(req,res)=>{const data=studentPortalDashboard(db,req.portalAuth.accountId);if(!data)return res.status(404).json({error:'portal account not found'});res.json(data);});
+app.get('/api/portal/students/:id/training-intelligence',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});const data=studentTrainingIntelligence(db,req.params.id,{locale:req.portalAuth.preferredLocale||'en'});res.json(data);});
+app.post('/api/portal/students/:id/puzzles/:puzzleId/attempt',portalOnly,(req,res)=>{const ok=db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(req.portalAuth.accountId,req.params.id);if(!ok)return res.status(404).json({error:'student not found'});try{res.json(recordPuzzleAttempt(db,{studentId:req.params.id,puzzleId:req.params.puzzleId,answerMove:req.body?.answerMove}));}catch(error){res.status(400).json({error:error.message});}});
 app.patch('/api/portal/preferences',portalOnly,(req,res)=>{try{res.json(setPortalPreferredLocale(db,req.portalAuth.accountId,req.body?.preferredLocale));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/portal/students/:id/diagnostic/start',portalOnly,(req,res)=>{try{seedDiagnostic0800(db);res.status(201).json(startDiagnostic0800(db,{accountId:req.portalAuth.accountId,studentId:req.params.id,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/portal/diagnostic/:id',portalOnly,(req,res)=>{const state=diagnosticState(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,locale:req.query?.locale||req.portalAuth.preferredLocale||'en'});if(!state)return res.status(404).json({error:'diagnostic not found'});res.json(state);});
@@ -131,6 +134,8 @@ app.post('/api/admin/students/:id/portal-access',adminOnly,(req,res)=>{try{const
 app.post('/api/admin/portal/accounts/:id/regenerate-code',adminOnly,(req,res)=>{try{res.json(regeneratePortalCode(db,req.params.id));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/students/:id/platform-accounts/verify',adminOnly,async(req,res,next)=>{try{const platform=cleanPlatform(req.body?.platform),username=String(req.body?.username||'').trim();if(!platform||!username)return res.status(400).json({error:'platform and username are required'});const verification=await verifyPlatformAccount(platform,username);const linked=linkStudentVerifiedAccount(db,req.params.id,verification);recordProfileVerification(db,linked.playerId,verification);res.status(201).json(linked);}catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
 app.get('/api/admin/students/:id/rating-progress',adminOnly,(req,res)=>{const data=studentRatingProgress(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
+app.get('/api/admin/students/:id/training-intelligence',adminOnly,(req,res)=>{const data=studentTrainingIntelligence(db,req.params.id,{locale:req.query?.locale||'en'});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
+app.post('/api/admin/students/:id/game-reviews',adminOnly,(req,res)=>{try{res.status(201).json(recordStudentGameReview(db,{studentId:req.params.id,...req.body}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/students',adminOnly,(_q,res)=>res.json(listStudents(db)));
 app.post('/api/admin/students',adminOnly,(req,res)=>{try{res.status(201).json(createStudent(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/schools',adminOnly,(_q,res)=>res.json(listSchools(db)));

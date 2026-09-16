@@ -359,3 +359,40 @@ CREATE TABLE IF NOT EXISTS lesson_skills (
   PRIMARY KEY(lesson_id,skill_id)
 );
 CREATE INDEX IF NOT EXISTS idx_lesson_skills_skill ON lesson_skills(skill_id,lesson_id);
+CREATE TABLE IF NOT EXISTS student_game_reviews (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL CHECK(source_type IN ('official','historical','external')),
+  source_game_id TEXT NOT NULL,
+  platform TEXT,
+  played_at TEXT,
+  result TEXT,
+  opening_name TEXT,
+  opening_eco TEXT,
+  status TEXT NOT NULL DEFAULT 'ready' CHECK(status IN ('pending','ready','reviewed')),
+  summary_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(student_id,source_type,source_game_id)
+);
+CREATE TABLE IF NOT EXISTS training_puzzles (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  finding_id TEXT NOT NULL UNIQUE REFERENCES student_game_findings(id) ON DELETE CASCADE,
+  skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
+  fen TEXT NOT NULL,
+  move_played TEXT,
+  best_move TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','mastered','archived')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS training_puzzle_attempts (
+  id TEXT PRIMARY KEY,
+  puzzle_id TEXT NOT NULL REFERENCES training_puzzles(id) ON DELETE CASCADE,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  answer_move TEXT,
+  correct INTEGER NOT NULL CHECK(correct IN (0,1)),
+  attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_game_reviews_student_time ON student_game_reviews(student_id,played_at);
+CREATE INDEX IF NOT EXISTS idx_training_puzzles_student_status ON training_puzzles(student_id,status);
+CREATE INDEX IF NOT EXISTS idx_puzzle_attempts_student_time ON training_puzzle_attempts(student_id,attempted_at);
