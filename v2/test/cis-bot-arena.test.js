@@ -14,7 +14,7 @@ test('new student starts CIS Bot Ladder at Pawn Scout',()=>{
 
 test('800-1200 placement unlocks a suitable higher CIS bot',()=>{
   const {db,student}=setup();placeStudentInHmena(db,{studentId:student.id,bandCode:'hmena-800-1200'});
-  const catalog=cisBotCatalog(db,student.id,{locale:'es'});assert.equal(catalog.bots.find(b=>b.code==='queen-tactician').unlocked,true);assert.equal(catalog.bots.find(b=>b.code==='king-strategist').unlocked,true);db.close();
+  const catalog=cisBotCatalog(db,student.id,{locale:'es'});assert.equal(catalog.bots.find(b=>b.code==='queen-tactician').unlocked,true);assert.equal(catalog.bots.find(b=>b.code==='king-strategist').unlocked,true);assert.equal(catalog.recommendedCode,'queen-tactician');db.close();
 });
 test('three-game CIS bot challenge can pass and unlock the next rung',async()=>{
   const {db,student}=setup();

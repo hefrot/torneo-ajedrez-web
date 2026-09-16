@@ -25,13 +25,21 @@ function placementUnlock(db,studentId){
   if(p.bandCode==='hmena-800-1200')return 1200;
   return 1200;
 }
+function placementRecommendedLevel(db,studentId){
+  const p=getHmenaPlacement(db,studentId);if(!p)return 200;
+  if(p.bandCode==='hmena-0-400')return 200;
+  if(p.bandCode==='hmena-400-800')return 600;
+  if(p.bandCode==='hmena-800-1200')return 1000;
+  return 1200;
+}
 function passedCodes(db,studentId){return new Set(db.prepare(`SELECT bp.code FROM cis_bot_challenges c JOIN cis_bot_profiles bp ON bp.id=c.bot_id WHERE c.student_id=? AND c.status='passed'`).all(studentId).map(r=>r.code));}
 export function cisBotCatalog(db,studentId,{locale='en'}={}){
   seedCisBots(db);const unlock=placementUnlock(db,studentId),passed=passedCodes(db,studentId);
   const rows=db.prepare(`SELECT id,code,name_en AS nameEn,name_es AS nameEs,target_level AS targetLevel,sequence_no AS sequence,skill_focus_json AS skillsJson FROM cis_bot_profiles WHERE active=1 ORDER BY sequence_no`).all();
   let maxPassed=0;for(const r of rows)if(passed.has(r.code))maxPassed=Math.max(maxPassed,r.targetLevel);
   const cap=Math.max(unlock,maxPassed?maxPassed+200:0),nameKey=locale==='es'?'nameEs':'nameEn';
-  const recommended=rows.filter(r=>r.targetLevel<=cap&&!passed.has(r.code)).at(-1)?.code||rows.find(r=>!passed.has(r.code))?.code||rows.at(-1)?.code;
+  const recommendedTarget=maxPassed?Math.min(cap,maxPassed+200):Math.min(cap,placementRecommendedLevel(db,studentId));
+  const recommended=rows.filter(r=>r.targetLevel<=recommendedTarget&&!passed.has(r.code)).at(-1)?.code||rows.filter(r=>r.targetLevel<=cap&&!passed.has(r.code))[0]?.code||rows.find(r=>!passed.has(r.code))?.code||rows.at(-1)?.code;
   const history=db.prepare(`SELECT bp.code,c.status,c.points,c.summary_json AS summaryJson,c.started_at AS startedAt,c.completed_at AS completedAt FROM cis_bot_challenges c JOIN cis_bot_profiles bp ON bp.id=c.bot_id WHERE c.student_id=? ORDER BY c.started_at DESC`).all(studentId);
   const latest=new Map();for(const h of history)if(!latest.has(h.code))latest.set(h.code,{status:h.status,points:h.points,summary:parse(h.summaryJson),startedAt:h.startedAt,completedAt:h.completedAt});
   return {version:CIS_BOT_VERSION,studentId,recommendedCode:recommended,bots:rows.map(r=>({code:r.code,name:r[nameKey],targetLevel:r.targetLevel,skills:parseArray(r.skillsJson),passed:passed.has(r.code),unlocked:r.targetLevel<=cap,recommended:r.code===recommended,lastChallenge:latest.get(r.code)||null}))};
