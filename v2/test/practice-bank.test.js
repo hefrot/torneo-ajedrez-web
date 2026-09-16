@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {openDatabase} from '../src/db.js';
 import {createStudent} from '../src/academic.js';
-import {seedPracticeBank,studentPracticeBank,recordPracticeBankAttempt,startPracticeStreak,submitPracticeStreakMove} from '../src/practice-bank.js';
+import {seedPracticeBank,studentPracticeBank,recordPracticeBankAttempt,startPracticeStreak,submitPracticeStreakMove,startPracticeStorm,practiceStormState,submitPracticeStormMove} from '../src/practice-bank.js';
 
 test('curated Lichess bank seeds and never exposes solutions to family payload',()=>{
   const db=openDatabase(':memory:');const seeded=seedPracticeBank(db);assert.ok(seeded.seeded>=250);
@@ -45,4 +45,15 @@ test('Puzzle Streak advances on correct answer and ends on first miss',()=>{
   const best=db.prepare('SELECT best_move AS bestMove FROM practice_bank_puzzles WHERE id=?').get(start.puzzle.id).bestMove;
   const good=submitPracticeStreakMove(db,{studentId:student.id,runId:start.id,answerMove:best});assert.equal(good.correct,true);assert.equal(good.ended,false);assert.equal(good.state.score,1);assert.ok(good.state.puzzle?.id);
   const bad=submitPracticeStreakMove(db,{studentId:student.id,runId:start.id,answerMove:'a1a1'});assert.equal(bad.correct,false);assert.equal(bad.ended,true);assert.equal(bad.state.status,'completed');assert.equal(bad.state.score,1);assert.equal(bad.state.best,1);db.close();
+});
+
+test('Puzzle Storm is server-timed, keeps going after mistakes, and never changes puzzle rating',()=>{
+  const db=openDatabase(':memory:');seedPracticeBank(db);const student=createStudent(db,{displayName:'Storm Kid'});
+  const startAt=new Date('2026-09-16T10:00:00Z');const before=studentPracticeBank(db,student.id,{limit:1}).profile;
+  const start=startPracticeStorm(db,{studentId:student.id,durationSeconds:180,now:startAt});assert.equal(start.status,'in_progress');assert.equal(start.remainingSeconds,180);assert.equal(start.score,0);assert.ok(start.puzzle?.id);
+  const best=db.prepare('SELECT best_move AS bestMove FROM practice_bank_puzzles WHERE id=?').get(start.puzzle.id).bestMove;
+  const good=submitPracticeStormMove(db,{studentId:student.id,runId:start.id,answerMove:best,now:new Date('2026-09-16T10:00:10Z')});assert.equal(good.correct,true);assert.equal(good.state.score,1);assert.equal(good.state.status,'in_progress');
+  const bad=submitPracticeStormMove(db,{studentId:student.id,runId:start.id,answerMove:'a1a1',now:new Date('2026-09-16T10:00:20Z')});assert.equal(bad.correct,false);assert.equal(bad.state.score,1);assert.equal(bad.state.mistakes,1);assert.equal(bad.state.status,'in_progress');
+  const after=studentPracticeBank(db,student.id,{limit:1}).profile;assert.equal(after.rating,before.rating);assert.equal(after.attempts,before.attempts);
+  const expired=practiceStormState(db,{studentId:student.id,runId:start.id,now:new Date('2026-09-16T10:03:01Z')});assert.equal(expired.status,'completed');assert.equal(expired.remainingSeconds,0);assert.equal(expired.score,1);assert.equal(expired.mistakes,1);db.close();
 });

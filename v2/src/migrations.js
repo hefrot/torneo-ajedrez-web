@@ -336,6 +336,25 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'practice-storm-v21',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS practice_storm_runs (
+        id TEXT PRIMARY KEY,student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','completed','abandoned')),
+        score INTEGER NOT NULL DEFAULT 0,mistakes INTEGER NOT NULL DEFAULT 0,duration_seconds INTEGER NOT NULL DEFAULT 180,
+        current_puzzle_id TEXT REFERENCES practice_bank_puzzles(id) ON DELETE SET NULL,
+        started_at TEXT NOT NULL,expires_at TEXT NOT NULL,completed_at TEXT);
+      CREATE TABLE IF NOT EXISTS practice_storm_items (
+        run_id TEXT NOT NULL REFERENCES practice_storm_runs(id) ON DELETE CASCADE,sequence_no INTEGER NOT NULL,
+        puzzle_id TEXT NOT NULL REFERENCES practice_bank_puzzles(id) ON DELETE CASCADE,answer_move TEXT,correct INTEGER CHECK(correct IN (0,1)),answered_at TEXT,
+        PRIMARY KEY(run_id,sequence_no),UNIQUE(run_id,puzzle_id));
+      CREATE INDEX IF NOT EXISTS idx_practice_storm_student ON practice_storm_runs(student_id,status,started_at);
+      CREATE INDEX IF NOT EXISTS idx_practice_storm_items_run ON practice_storm_items(run_id,sequence_no);`);
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

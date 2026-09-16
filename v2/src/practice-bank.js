@@ -60,7 +60,8 @@ export function studentPracticeBank(db,studentId,{limit=3}={}){
   const byTheme=new Map();for(const row of history){for(const theme of row.themes||[]){if(['short','long','veryLong','middlegame','endgame','advantage','crushing'].includes(theme))continue;const x=byTheme.get(theme)||{theme,attempts:0,correct:0};x.attempts++;x.correct+=row.correct?1:0;byTheme.set(theme,x);}}
   const themeStats=[...byTheme.values()].map(x=>({...x,accuracy:Math.round(x.correct/x.attempts*100)})).sort((a,b)=>b.attempts-a.attempts||b.accuracy-a.accuracy).slice(0,8);
   const activeStreak=db.prepare("SELECT id,score FROM practice_streak_runs WHERE student_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId),bestStreakRun=Number(db.prepare("SELECT MAX(score) AS n FROM practice_streak_runs WHERE student_id=? AND status='completed'").get(studentId)?.n||0);
-  return {targetThemes:themes,targetRating:rating,profile,history:history.reverse().map(({themesJson,...row})=>row),themeStats,streakMode:{activeRunId:activeStreak?.id||null,current:Number(activeStreak?.score||0),best:bestStreakRun},summary:{attempts7d:Number(attempts7d?.n||0),correct7d:Number(attempts7d?.c||0)},puzzles:pool.slice(0,Math.max(1,Math.min(12,Number(limit)||3))).map(({themesJson,...row})=>row)};
+  const activeStorm=db.prepare("SELECT id,score,mistakes,expires_at AS expiresAt FROM practice_storm_runs WHERE student_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId),bestStorm=Number(db.prepare("SELECT MAX(score) AS n FROM practice_storm_runs WHERE student_id=? AND status='completed'").get(studentId)?.n||0);
+  return {targetThemes:themes,targetRating:rating,profile,history:history.reverse().map(({themesJson,...row})=>row),themeStats,streakMode:{activeRunId:activeStreak?.id||null,current:Number(activeStreak?.score||0),best:bestStreakRun},stormMode:{activeRunId:activeStorm?.id||null,current:Number(activeStorm?.score||0),mistakes:Number(activeStorm?.mistakes||0),expiresAt:activeStorm?.expiresAt||null,best:bestStorm},summary:{attempts7d:Number(attempts7d?.n||0),correct7d:Number(attempts7d?.c||0)},puzzles:pool.slice(0,Math.max(1,Math.min(12,Number(limit)||3))).map(({themesJson,...row})=>row)};
 }
 export function recordPracticeBankAttempt(db,{studentId,puzzleId,answerMove}={}){
   const puzzle=db.prepare("SELECT id,best_move AS bestMove,rating FROM practice_bank_puzzles WHERE id=? AND active=1").get(puzzleId);
@@ -122,4 +123,43 @@ export function submitPracticeStreakMove(db,{studentId,runId,answerMove}={}){
     db.prepare('UPDATE practice_streak_runs SET score=?,current_puzzle_id=? WHERE id=?').run(score,next.id,runId);db.prepare('INSERT INTO practice_streak_items(run_id,sequence_no,puzzle_id) VALUES (?,?,?)').run(runId,score+1,next.id);result={...attempt,ended:false};
   })();
   return {...result,state:practiceStreakState(db,{studentId,runId})};
+}
+
+function pickStormPuzzle(db,studentId,runId,sequenceNo){
+  const profile=studentPracticeProfile(db,studentId),target=Number(profile.rating||900),themes=[...new Set([...targetThemes(db,studentId),...keyThemes.practice])];
+  const used=new Set(db.prepare('SELECT puzzle_id AS id FROM practice_storm_items WHERE run_id=?').all(runId).map(x=>x.id));
+  const rows=db.prepare(`SELECT id,source_id AS sourceId,fen,rating,popularity,plays,themes_json AS themesJson,side_to_move AS sideToMove FROM practice_bank_puzzles WHERE active=1`).all();
+  let pool=rows.filter(row=>!used.has(row.id)&&parse(row.themesJson).some(t=>themes.includes(t))&&Math.abs(Number(row.rating||target)-target)<=280);
+  if(!pool.length)pool=rows.filter(row=>!used.has(row.id)&&parse(row.themesJson).some(t=>themes.includes(t)));
+  if(!pool.length)return null;
+  pool.sort((a,b)=>hash(`${runId}:${sequenceNo}:${a.id}`).localeCompare(hash(`${runId}:${sequenceNo}:${b.id}`)));
+  return safeBankPuzzle(pool[0]);
+}
+function stormRunRow(db,runId,studentId){return db.prepare(`SELECT id,student_id AS studentId,status,score,mistakes,duration_seconds AS durationSeconds,current_puzzle_id AS currentPuzzleId,started_at AS startedAt,expires_at AS expiresAt,completed_at AS completedAt FROM practice_storm_runs WHERE id=? AND student_id=?`).get(runId,studentId);}
+export function practiceStormState(db,{studentId,runId,now=new Date()}={}){
+  let run=stormRunRow(db,runId,studentId);if(!run)return null;
+  const nowMs=new Date(now).getTime(),expiresMs=Date.parse(run.expiresAt);
+  if(run.status==='in_progress'&&Number.isFinite(expiresMs)&&nowMs>=expiresMs){const at=new Date(nowMs).toISOString();db.prepare("UPDATE practice_storm_runs SET status='completed',current_puzzle_id=NULL,completed_at=? WHERE id=?").run(at,runId);run=stormRunRow(db,runId,studentId);}
+  const puzzle=run.currentPuzzleId?safeBankPuzzle(db.prepare(`SELECT id,source_id AS sourceId,fen,rating,popularity,plays,themes_json AS themesJson,side_to_move AS sideToMove FROM practice_bank_puzzles WHERE id=?`).get(run.currentPuzzleId)):null;
+  const best=Number(db.prepare("SELECT MAX(score) AS n FROM practice_storm_runs WHERE student_id=? AND status='completed'").get(studentId)?.n||0),remainingSeconds=run.status==='in_progress'?Math.max(0,Math.ceil((Date.parse(run.expiresAt)-nowMs)/1000)):0;
+  return {...run,score:Number(run.score||0),mistakes:Number(run.mistakes||0),best,remainingSeconds,puzzle};
+}
+export function startPracticeStorm(db,{studentId,durationSeconds=180,now=new Date()}={}){
+  if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))throw new TypeError('student not found');
+  const existing=db.prepare("SELECT id FROM practice_storm_runs WHERE student_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId);if(existing){const state=practiceStormState(db,{studentId,runId:existing.id,now});if(state?.status==='in_progress')return state;}
+  const duration=Math.max(60,Math.min(600,Number(durationSeconds)||180)),start=new Date(now),runId=`PSM-${randomUUID()}`,expires=new Date(start.getTime()+duration*1000);
+  db.prepare('INSERT INTO practice_storm_runs(id,student_id,duration_seconds,started_at,expires_at) VALUES (?,?,?,?,?)').run(runId,studentId,duration,start.toISOString(),expires.toISOString());
+  const puzzle=pickStormPuzzle(db,studentId,runId,1);if(!puzzle){db.prepare("UPDATE practice_storm_runs SET status='completed',completed_at=?,current_puzzle_id=NULL WHERE id=?").run(start.toISOString(),runId);return practiceStormState(db,{studentId,runId,now});}
+  db.prepare('UPDATE practice_storm_runs SET current_puzzle_id=? WHERE id=?').run(puzzle.id,runId);db.prepare('INSERT INTO practice_storm_items(run_id,sequence_no,puzzle_id) VALUES (?,?,?)').run(runId,1,puzzle.id);return practiceStormState(db,{studentId,runId,now});
+}
+export function submitPracticeStormMove(db,{studentId,runId,answerMove,now=new Date()}={}){
+  const state=practiceStormState(db,{studentId,runId,now});if(!state||state.status!=='in_progress'||!state.currentPuzzleId)throw new TypeError('storm run not active');
+  const puzzle=db.prepare('SELECT best_move AS bestMove FROM practice_bank_puzzles WHERE id=?').get(state.currentPuzzleId),answer=norm(answerMove),correct=answer===norm(puzzle?.bestMove),at=new Date(now).toISOString();let nextState;
+  db.transaction(()=>{
+    const seq=Number(state.score||0)+Number(state.mistakes||0)+1;db.prepare('UPDATE practice_storm_items SET answer_move=?,correct=?,answered_at=? WHERE run_id=? AND sequence_no=?').run(answer||null,correct?1:0,at,runId,seq);
+    const score=Number(state.score||0)+(correct?1:0),mistakes=Number(state.mistakes||0)+(correct?0:1),next=pickStormPuzzle(db,studentId,runId,seq+1);
+    if(!next){db.prepare("UPDATE practice_storm_runs SET status='completed',score=?,mistakes=?,current_puzzle_id=NULL,completed_at=? WHERE id=?").run(score,mistakes,at,runId);return;}
+    db.prepare('UPDATE practice_storm_runs SET score=?,mistakes=?,current_puzzle_id=? WHERE id=?').run(score,mistakes,next.id,runId);db.prepare('INSERT INTO practice_storm_items(run_id,sequence_no,puzzle_id) VALUES (?,?,?)').run(runId,seq+1,next.id);
+  })();
+  nextState=practiceStormState(db,{studentId,runId,now});return {correct,state:nextState};
 }
