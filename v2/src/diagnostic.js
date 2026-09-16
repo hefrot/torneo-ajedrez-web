@@ -64,6 +64,22 @@ export function diagnosticState(db,{accountId,attemptId:aid,locale='en'}={}){
   return Number(row.remaining)===0;
 }
 
+
+const diagnosticStatusRank={unseen:0,introduced:1,practicing:2,drill_mastered:3,applied_in_game:4,regressed:5};
+function persistDiagnosticSkillEvidence(db,attempt){
+  const rows=db.prepare(`SELECT i.skill_id AS skillId,cs.code,r.correct,r.answered_at AS answeredAt FROM diagnostic_responses r JOIN diagnostic_items i ON i.id=r.item_id JOIN curriculum_skills cs ON cs.id=i.skill_id WHERE r.attempt_id=? ORDER BY i.sequence_no`).all(attempt.id);
+  const current=db.prepare('SELECT status,confidence,evidence_json AS evidenceJson FROM student_skills WHERE student_id=? AND skill_id=?');
+  const upsert=db.prepare(`INSERT INTO student_skills(student_id,skill_id,status,confidence,evidence_json,last_assessed_at,updated_at) VALUES (?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(student_id,skill_id) DO UPDATE SET status=excluded.status,confidence=excluded.confidence,evidence_json=excluded.evidence_json,last_assessed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`);
+  for(const row of rows){
+    const existing=current.get(attempt.studentId,row.skillId),proposed=row.correct?'practicing':'unseen';
+    const keepExisting=existing&&(existing.status==='regressed'||diagnosticStatusRank[existing.status]>diagnosticStatusRank[proposed]);
+    const status=keepExisting?existing.status:proposed,confidence=keepExisting?existing.confidence:(row.correct?60:25);
+    let evidence={};try{evidence=JSON.parse(existing?.evidenceJson||'{}');}catch{}
+    evidence={...evidence,diagnostic:{blueprint:DIAGNOSTIC_CODE,attemptId:attempt.id,skillCode:row.code,correct:Boolean(row.correct),answeredAt:row.answeredAt}};
+    upsert.run(attempt.studentId,row.skillId,status,confidence,JSON.stringify(evidence));
+  }
+}
+
 function completeAttempt(db,attempt,locale){
   const foundations=scoreStage(db,attempt.id,'foundations');
   const development=scoreStage(db,attempt.id,'development');
@@ -74,6 +90,7 @@ function completeAttempt(db,attempt,locale){
   db.transaction(()=>{
     db.prepare(`UPDATE diagnostic_attempts SET status='completed',stage='completed',completed_at=CURRENT_TIMESTAMP,foundations_score=?,development_score=?,placement_band_code=?,summary_json=? WHERE id=?`).run(foundations.percent,development.percent,bandCode,JSON.stringify(summary),attempt.id);
     placeStudentInHmena(db,{studentId:attempt.studentId,bandCode,source:'assessment',confidence,note:bandCode==='hmena-800-1200'?'Cleared HMENA 0–800 screening; continue with 800–1200 diagnostic.':'HMENA 0–800 adaptive diagnostic.'});
+    persistDiagnosticSkillEvidence(db,attempt);
     const kind=db.prepare('SELECT 1 FROM assessments WHERE student_id=? LIMIT 1').get(attempt.studentId)?'progress':'initial';
     const overallLevel=bandCode==='hmena-0-400'?200:bandCode==='hmena-400-800'?600:800;
     db.prepare(`INSERT INTO assessments(id,student_id,kind,overall_level,score_json,coach_note) VALUES (?,?,?,?,?,?)`).run(`ASM-${randomUUID()}`,attempt.studentId,kind,overallLevel,JSON.stringify({diagnostic:DIAGNOSTIC_CODE,...summary}),null);
@@ -93,6 +110,7 @@ export function submitDiagnosticAnswer(db,{accountId,attemptId:aid,itemId,answer
   if(stageFinished(db,aid,'foundations')&&attempt.stage==='foundations'){
     const f=scoreStage(db,aid,'foundations');
     if(f.percent<FOUNDATION_PASS)return completeAttempt(db,attempt,locale);
+    persistDiagnosticSkillEvidence(db,attempt);
     db.prepare("UPDATE diagnostic_attempts SET stage='development',foundations_score=? WHERE id=?").run(f.percent,aid);
     return {correct:Boolean(correct),advanced:true,stage:'development',state:diagnosticState(db,{accountId,attemptId:aid,locale})};
   }

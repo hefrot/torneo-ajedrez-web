@@ -31,6 +31,7 @@ import {linkStudentVerifiedAccount} from './student-platform-link.js';
 import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from './training-intelligence.js';
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
 import {course0800Overview} from './hmena-course.js';
+import {nextLessonRecommendation,recordCoachLessonDecision,latestApprovedPlan} from './next-lesson-engine.js';
 import {studentOpeningProfile} from './opening-trainer.js';
 
 const app=express();
@@ -128,6 +129,8 @@ app.get('/api/admin/students/:id/next-lesson',adminOnly,(req,res)=>{
   res.json({lesson,trackCode,placement,source:lesson?'legacy_sequence':null});
 });
 app.get('/api/admin/students/:id/learning-priorities',adminOnly,(req,res)=>res.json(req.query?.locale?localizedLearningPriorities(db,req.params.id,{limit:req.query?.limit||5,locale:req.query.locale}):recommendLearningPriorities(db,req.params.id,{limit:req.query?.limit||5})));
+app.get('/api/admin/students/:id/next-lesson-engine',adminOnly,(req,res)=>{const locale=req.query?.locale||'es';const data=nextLessonRecommendation(db,req.params.id,{locale});if(!data)return res.status(404).json({error:'student not found'});res.json({...data,approvedPlan:latestApprovedPlan(db,req.params.id,{locale})});});
+app.post('/api/admin/students/:id/next-lesson-decision',adminOnly,(req,res)=>{try{res.status(201).json(recordCoachLessonDecision(db,{studentId:req.params.id,decision:req.body?.decision||'accepted',selectedSkillCode:req.body?.selectedSkillCode||null,selectedLessonId:req.body?.selectedLessonId||null,coachNote:req.body?.coachNote||null,locale:req.body?.locale||'es'}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/students/:id/placement',adminOnly,(req,res)=>{try{res.json(placeStudentInHmena(db,{studentId:req.params.id,bandCode:req.body?.bandCode,source:req.body?.source||'manual',confidence:req.body?.confidence??80,note:req.body?.note||null}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/students/:id/hmena-skills/:code',adminOnly,(req,res)=>{try{res.json(setHmenaSkillStatus(db,{studentId:req.params.id,skillCode:req.params.code,status:req.body?.status,confidence:req.body?.confidence??null,evidence:req.body?.evidence||{}}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/sessions/:id/lessons',adminOnly,(req,res)=>{try{res.status(201).json(assignLessonToSession(db,{sessionId:req.params.id,lessonId:req.body?.lessonId,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});

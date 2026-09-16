@@ -2,6 +2,7 @@ import {getHmenaPlacement} from './hmena-curriculum.js';
 import {normalizeLocale,localizedLearningPriorities,localizeSkillRows} from './curriculum-localization.js';
 import {studentRatingProgress} from './rating-tracking.js';
 import {studentTrainingIntelligence} from './training-intelligence.js';
+import {latestApprovedPlan} from './next-lesson-engine.js';
 import {studentOpeningProfile} from './opening-trainer.js';
 
 export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
@@ -20,6 +21,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     priorities:learning.priorities,
     ratings:studentRatingProgress(db,student.id),
     training:studentTrainingIntelligence(db,student.id,{locale}),
+    nextPlan:(()=>{const plan=latestApprovedPlan(db,student.id,{locale});return plan?{id:plan.id,decision:plan.decision,lesson:plan.lesson,skill:plan.skill,createdAt:plan.createdAt}:null;})(),
     openingTrainer:studentOpeningProfile(db,student.id,{locale}),
     upcoming:upcomingStmt.all(student.id,at),
     assignments:assignmentStmt.all(student.id),

@@ -170,6 +170,25 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'academic-next-lesson-v10',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS coach_lesson_decisions (
+        id TEXT PRIMARY KEY, student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        recommended_skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
+        recommended_lesson_id TEXT REFERENCES lessons(id) ON DELETE SET NULL,
+        selected_skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
+        selected_lesson_id TEXT REFERENCES lessons(id) ON DELETE SET NULL,
+        algorithm_version TEXT NOT NULL, recommendation_score REAL, confidence INTEGER CHECK(confidence BETWEEN 0 AND 100),
+        reasons_json TEXT NOT NULL DEFAULT '[]', context_json TEXT NOT NULL DEFAULT '{}',
+        decision TEXT NOT NULL CHECK(decision IN ('accepted','overridden','dismissed')), coach_note TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_coach_lesson_decisions_student_time ON coach_lesson_decisions(student_id,created_at);`);
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

@@ -429,3 +429,22 @@ CREATE TABLE IF NOT EXISTS academic_external_games (
 );
 CREATE INDEX IF NOT EXISTS idx_academic_games_student_time ON academic_external_games(student_id,played_at);
 CREATE INDEX IF NOT EXISTS idx_academic_games_analysis ON academic_external_games(analysis_status,played_at);
+
+
+CREATE TABLE IF NOT EXISTS coach_lesson_decisions (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  recommended_skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
+  recommended_lesson_id TEXT REFERENCES lessons(id) ON DELETE SET NULL,
+  selected_skill_id TEXT REFERENCES curriculum_skills(id) ON DELETE SET NULL,
+  selected_lesson_id TEXT REFERENCES lessons(id) ON DELETE SET NULL,
+  algorithm_version TEXT NOT NULL,
+  recommendation_score REAL,
+  confidence INTEGER CHECK(confidence BETWEEN 0 AND 100),
+  reasons_json TEXT NOT NULL DEFAULT '[]',
+  context_json TEXT NOT NULL DEFAULT '{}',
+  decision TEXT NOT NULL CHECK(decision IN ('accepted','overridden','dismissed')),
+  coach_note TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_coach_lesson_decisions_student_time ON coach_lesson_decisions(student_id,created_at);
