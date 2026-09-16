@@ -5,10 +5,11 @@ import {createStudent,createProgram,enrollStudent} from '../src/academic.js';
 import {seedHmenaFramework,placeStudentInHmena,setHmenaSkillStatus} from '../src/hmena-curriculum.js';
 import {seedCurriculumLocalizations} from '../src/curriculum-localization.js';
 import {seedHmenaCourse0800} from '../src/hmena-course.js';
+import {seedHmenaCourse1200} from '../src/hmena-course-1200.js';
 import {nextLessonRecommendation,recordCoachLessonDecision,latestApprovedPlan} from '../src/next-lesson-engine.js';
 
 function setup(band='hmena-400-800'){
-  const db=openDatabase(':memory:');seedHmenaFramework(db);seedCurriculumLocalizations(db);seedHmenaCourse0800(db);
+  const db=openDatabase(':memory:');seedHmenaFramework(db);seedCurriculumLocalizations(db);seedHmenaCourse0800(db);seedHmenaCourse1200(db);
   const student=createStudent(db,{displayName:'Next Lesson Student'});if(band)placeStudentInHmena(db,{studentId:student.id,bandCode:band});
   return {db,student};
 }
@@ -97,4 +98,10 @@ test('old game mistakes decay below recent evidence',()=>{
 test('two repeated coach selections rotate the next recommendation toward a parallel branch',()=>{
   const {db,student}=setup();recordCoachLessonDecision(db,{studentId:student.id,decision:'accepted',locale:'en'});recordCoachLessonDecision(db,{studentId:student.id,decision:'accepted',locale:'en'});
   const rec=nextLessonRecommendation(db,student.id,{locale:'en'});assert.notEqual(rec.recommendation.skill.code,'DEV-HANGING');assert.ok(rec.recommendation.reasons.some(r=>r.code==='parallel'));db.close();
+});
+
+test('800-1200 placement resolves to a real competitive fundamentals lesson',()=>{
+  const {db,student}=setup('hmena-800-1200');
+  const rec=nextLessonRecommendation(db,student.id,{locale:'es'});
+  assert.ok(rec.recommendation.lesson);assert.match(rec.recommendation.lesson.id,/LESSON-HMENA-1200-/);assert.ok(rec.recommendation.skill.code.startsWith('CMP-'));db.close();
 });

@@ -30,7 +30,9 @@ import {studentRatingProgress,captureVerifiedAccountRatings} from './rating-trac
 import {linkStudentVerifiedAccount} from './student-platform-link.js';
 import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from './training-intelligence.js';
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
+import {seedDiagnostic1200,startDiagnostic1200,diagnostic1200State,submitDiagnostic1200Answer} from './diagnostic-1200.js';
 import {course0800Overview} from './hmena-course.js';
+import {course1200Overview} from './hmena-course-1200.js';
 import {nextLessonRecommendation,recordCoachLessonDecision,latestApprovedPlan} from './next-lesson-engine.js';
 import {programLessonRecommendation,assignProgramLesson} from './group-lesson-engine.js';
 import {studentOpeningProfile} from './opening-trainer.js';
@@ -69,6 +71,9 @@ app.patch('/api/portal/preferences',portalOnly,(req,res)=>{try{res.json(setPorta
 app.post('/api/portal/students/:id/diagnostic/start',portalOnly,(req,res)=>{try{seedDiagnostic0800(db);res.status(201).json(startDiagnostic0800(db,{accountId:req.portalAuth.accountId,studentId:req.params.id,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/portal/diagnostic/:id',portalOnly,(req,res)=>{const state=diagnosticState(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,locale:req.query?.locale||req.portalAuth.preferredLocale||'en'});if(!state)return res.status(404).json({error:'diagnostic not found'});res.json(state);});
 app.post('/api/portal/diagnostic/:id/answer',portalOnly,(req,res)=>{try{res.json(submitDiagnosticAnswer(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,itemId:req.body?.itemId,answerKey:req.body?.answerKey,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/portal/students/:id/diagnostic-1200/start',portalOnly,(req,res)=>{try{seedDiagnostic1200(db);res.status(201).json(startDiagnostic1200(db,{accountId:req.portalAuth.accountId,studentId:req.params.id,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
+app.get('/api/portal/diagnostic-1200/:id',portalOnly,(req,res)=>{const state=diagnostic1200State(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,locale:req.query?.locale||req.portalAuth.preferredLocale||'en'});if(!state)return res.status(404).json({error:'diagnostic not found'});res.json(state);});
+app.post('/api/portal/diagnostic-1200/:id/answer',portalOnly,(req,res)=>{try{res.json(submitDiagnostic1200Answer(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,itemId:req.body?.itemId,answerKey:req.body?.answerKey,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/config',(_q,res)=>{
   const control=getSeasonControl(db);
   const rules=leagueRuleMap(db);res.json({seasonName:process.env.SEASON_NAME||'HMENA Chess League 2026',gamesPerOpponent:rules.games_per_opponent,scoring:rules.scoring,minActivityHours:24,playAhead:true,automatic24hForfeit:false,registrationRequiresVerifiedPlatformAccount:true,ownershipPolicy:rules.ownership_requirement,registrationOpen:control.registration_state==='OPEN',registrationState:control.registration_state,seasonStatus:control.season_status});
@@ -123,6 +128,7 @@ app.get('/api/admin/coach/dashboard',adminOnly,(req,res)=>{try{res.json(coachDas
 app.get('/api/admin/curriculum',adminOnly,(_q,res)=>res.json(listCurriculum(db)));
 app.get('/api/admin/curriculum/hmena',adminOnly,(req,res)=>res.json(localizedHmenaOverview(db,req.query?.locale||'en')));
 app.get('/api/admin/course/hmena-0-800',adminOnly,(req,res)=>res.json(course0800Overview(db,req.query?.locale||'en')));
+app.get('/api/admin/course/hmena-800-1200',adminOnly,(req,res)=>res.json(course1200Overview(db,req.query?.locale||'en')));
 app.get('/api/admin/students/:id/next-lesson',adminOnly,(req,res)=>{
   const placement=getHmenaPlacement(db,req.params.id);
   const trackCode=({'hmena-0-400':'seeds','hmena-400-800':'builders','hmena-800-1200':'thinkers'})[placement?.bandCode]||null;
