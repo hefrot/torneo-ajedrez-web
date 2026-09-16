@@ -29,3 +29,6 @@
 
 .report-grid{display:grid;gap:12px}.progress-report-card{border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(255,255,255,.03)}.progress-report-card p{margin:7px 0;line-height:1.4}.progress-report-card .coach-card-head{margin-bottom:8px}
 @media(max-width:640px){.progress-report-card{padding:12px}.report-grid{gap:10px}}
+
+.bot-ladder{display:grid;gap:.7rem;margin-top:.8rem}.bot-rung{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.8rem 1rem;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.bot-rung>div{display:grid;gap:.15rem}.bot-rung small{display:block;color:var(--muted)}.bot-rung.locked{opacity:.5}.bot-rung.passed{border-style:solid}.bot-board{margin:1rem auto;max-width:520px}.bot-move-state{min-height:1.5rem;text-align:center;margin-top:.5rem}.bot-dialog{max-width:640px}
+@media(max-width:640px){.bot-rung{align-items:flex-start;flex-direction:column}.bot-rung .btn{width:100%}}

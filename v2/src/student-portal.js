@@ -5,6 +5,7 @@ import {studentRatingProgress} from './rating-tracking.js';
 import {studentTrainingIntelligence} from './training-intelligence.js';
 import {latestApprovedPlan} from './next-lesson-engine.js';
 import {studentOpeningProfile} from './opening-trainer.js';
+import {cisBotCatalog} from './cis-bot-arena.js';
 
 export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
   const account=db.prepare("SELECT id,login_name AS loginName,display_name AS displayName,role,preferred_locale AS preferredLocale FROM portal_accounts WHERE id=? AND status='active'").get(accountId);
@@ -24,6 +25,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     training:studentTrainingIntelligence(db,student.id,{locale}),
     nextPlan:(()=>{const plan=latestApprovedPlan(db,student.id,{locale});return plan?{id:plan.id,decision:plan.decision,lesson:plan.lesson,skill:plan.skill,createdAt:plan.createdAt}:null;})(),
     openingTrainer:studentOpeningProfile(db,student.id,{locale}),
+    botArena:cisBotCatalog(db,student.id,{locale}),
     upcoming:upcomingStmt.all(student.id,at),
     assignments:assignmentStmt.all(student.id),
     attendance:attendanceStmt.get(student.id),

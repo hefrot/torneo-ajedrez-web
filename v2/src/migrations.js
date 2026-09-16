@@ -239,6 +239,21 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'cis-bot-arena-v15',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS cis_bot_profiles (
+        id TEXT PRIMARY KEY,code TEXT NOT NULL UNIQUE,name_en TEXT NOT NULL,name_es TEXT NOT NULL,target_level INTEGER NOT NULL,sequence_no INTEGER NOT NULL,config_json TEXT NOT NULL DEFAULT '{}',skill_focus_json TEXT NOT NULL DEFAULT '[]',active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)));
+      CREATE TABLE IF NOT EXISTS cis_bot_challenges (
+        id TEXT PRIMARY KEY,student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,bot_id TEXT NOT NULL REFERENCES cis_bot_profiles(id) ON DELETE RESTRICT,status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','passed','failed','abandoned')),games_required INTEGER NOT NULL DEFAULT 3,points REAL NOT NULL DEFAULT 0,started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT,summary_json TEXT NOT NULL DEFAULT '{}');
+      CREATE TABLE IF NOT EXISTS cis_bot_games (
+        id TEXT PRIMARY KEY,challenge_id TEXT NOT NULL REFERENCES cis_bot_challenges(id) ON DELETE CASCADE,game_no INTEGER NOT NULL,student_color TEXT NOT NULL CHECK(student_color IN ('white','black')),status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','completed','abandoned')),fen TEXT NOT NULL,moves_uci TEXT NOT NULL DEFAULT '',result TEXT,pgn TEXT,analysis_json TEXT NOT NULL DEFAULT '{}',started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT,UNIQUE(challenge_id,game_no));
+      CREATE INDEX IF NOT EXISTS idx_cis_bot_challenges_student ON cis_bot_challenges(student_id,started_at);
+      CREATE INDEX IF NOT EXISTS idx_cis_bot_games_challenge ON cis_bot_games(challenge_id,game_no);`);
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
