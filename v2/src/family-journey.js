@@ -27,7 +27,8 @@ export function familyJourney(db,studentId,{locale='en'}={}){
   const assessment=exists("SELECT 1 FROM diagnostic_attempts WHERE student_id=? AND status='completed' LIMIT 1")(studentId)||exists("SELECT 1 FROM student_curriculum_placements WHERE student_id=? AND framework_id='FRAMEWORK-HMENA-2500' LIMIT 1")(studentId);
   const correctPuzzles=Number(db.prepare("SELECT COUNT(*) AS n FROM training_puzzle_attempts WHERE student_id=? AND correct=1").get(studentId)?.n||0);
   const practiceMission=exists("SELECT 1 FROM assignments WHERE student_id=? AND title LIKE 'CIS Practice · %' AND status IN ('submitted','completed') LIMIT 1")(studentId);
-  const practice=correctPuzzles>=3||practiceMission;
+  const bankCorrect=Number(db.prepare("SELECT COUNT(*) AS n FROM practice_bank_attempts WHERE student_id=? AND correct=1").get(studentId)?.n||0);
+  const practice=correctPuzzles>=3||bankCorrect>=3||practiceMission;
   const bot=exists("SELECT 1 FROM cis_bot_challenges WHERE student_id=? AND status IN ('passed','failed') LIMIT 1")(studentId);
   const coach=exists("SELECT 1 FROM coach_lesson_decisions WHERE student_id=? AND decision IN ('accepted','overridden') LIMIT 1")(studentId);
   const report=exists("SELECT 1 FROM progress_reports WHERE student_id=? AND status='published' LIMIT 1")(studentId);
@@ -45,11 +46,12 @@ export function familyJourney(db,studentId,{locale='en'}={}){
       ?{kind:'coach',title:copy[l].waitCoach[0],description:copy[l].waitCoach[1]}
       :{kind:current,title:copy[l][current][0],description:copy[l][current][1]};
   const recentCorrect=Number(db.prepare("SELECT COUNT(*) AS n FROM training_puzzle_attempts WHERE student_id=? AND correct=1 AND attempted_at>=datetime('now','-7 day')").get(studentId)?.n||0);
+  const recentBankCorrect=Number(db.prepare("SELECT COUNT(*) AS n FROM practice_bank_attempts WHERE student_id=? AND correct=1 AND attempted_at>=datetime('now','-7 day')").get(studentId)?.n||0);
   const recentBotGames=Number(db.prepare(`SELECT COUNT(*) AS n FROM cis_bot_games g JOIN cis_bot_challenges c ON c.id=g.challenge_id
     WHERE c.student_id=? AND g.status='completed' AND COALESCE(g.completed_at,g.started_at)>=datetime('now','-7 day')`).get(studentId)?.n||0);
   const activePuzzles=Number(db.prepare("SELECT COUNT(*) AS n FROM training_puzzles WHERE student_id=? AND status='active'").get(studentId)?.n||0);
   return {
     studentId,steps,completed,total:order.length,percent:Math.round(completed/order.length*100),mission,
-    activity:{correctPuzzles7d:recentCorrect,botGames7d:recentBotGames,activePuzzles}
+    activity:{correctPuzzles7d:recentCorrect+recentBankCorrect,personalCorrectPuzzles7d:recentCorrect,bankCorrectPuzzles7d:recentBankCorrect,botGames7d:recentBotGames,activePuzzles}
   };
 }

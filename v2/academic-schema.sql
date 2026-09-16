@@ -538,6 +538,21 @@ CREATE TABLE IF NOT EXISTS cis_bot_games (
 CREATE INDEX IF NOT EXISTS idx_cis_bot_challenges_student ON cis_bot_challenges(student_id,started_at);
 CREATE INDEX IF NOT EXISTS idx_cis_bot_games_challenge ON cis_bot_games(challenge_id,game_no);
 
+
+CREATE TABLE IF NOT EXISTS practice_bank_puzzles (
+  id TEXT PRIMARY KEY,source TEXT NOT NULL,source_id TEXT NOT NULL UNIQUE,fen TEXT NOT NULL,best_move TEXT NOT NULL,
+  solution_moves_json TEXT NOT NULL DEFAULT '[]',rating INTEGER,popularity INTEGER,plays INTEGER,themes_json TEXT NOT NULL DEFAULT '[]',
+  game_url TEXT,opening_tags_json TEXT NOT NULL DEFAULT '[]',side_to_move TEXT CHECK(side_to_move IN ('white','black')),
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS practice_bank_attempts (
+  id TEXT PRIMARY KEY,puzzle_id TEXT NOT NULL REFERENCES practice_bank_puzzles(id) ON DELETE CASCADE,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,answer_move TEXT,correct INTEGER NOT NULL CHECK(correct IN (0,1)),
+  attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_practice_bank_active_rating ON practice_bank_puzzles(active,rating);
+CREATE INDEX IF NOT EXISTS idx_practice_bank_attempts_student ON practice_bank_attempts(student_id,attempted_at);
+
 CREATE VIEW IF NOT EXISTS v_public_league_accounts AS
 SELECT p.id,p.name,p.registration_status,p.availability,p.last_activity_at,a.platform,a.username,a.verified_at,a.verification_source
 FROM players p JOIN player_accounts a ON a.player_id=p.id

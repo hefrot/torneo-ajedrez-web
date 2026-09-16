@@ -8,6 +8,7 @@ import {studentOpeningProfile} from './opening-trainer.js';
 import {cisBotCatalog} from './cis-bot-arena.js';
 import {familyJourney} from './family-journey.js';
 import {syncPracticeMissions} from './practice-plan.js';
+import {studentPracticeBank} from './practice-bank.js';
 
 export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
   const account=db.prepare("SELECT id,login_name AS loginName,display_name AS displayName,role,preferred_locale AS preferredLocale FROM portal_accounts WHERE id=? AND status='active'").get(accountId);
@@ -32,6 +33,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     upcoming:upcomingStmt.all(student.id,at),
     assignments,
     practiceMissions,
+    practiceBank:studentPracticeBank(db,student.id,{limit:3}),
     attendance:attendanceStmt.get(student.id),
     skills,
     sharedCoachNotes:account.role==='guardian'?noteStmt.all(student.id):[],
