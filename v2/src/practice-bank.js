@@ -66,7 +66,9 @@ export function studentPracticeBank(db,studentId,{limit=3}={}){
 }
 export function practiceThemeCatalog(db,studentId){
   if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))return null;
-  const recommended=new Set(targetThemes(db,studentId)),rows=db.prepare("SELECT id,themes_json AS themesJson FROM practice_bank_puzzles WHERE active=1").all();
+  const directTheme={hanging:'hangingPiece',fork:'fork',pin:'pin',skewer:'skewer',discovered:'discoveredAttack'},recommended=new Set();
+  for(const row of db.prepare("SELECT details FROM assignments WHERE student_id=? AND status IN ('assigned','submitted','completed') ORDER BY created_at DESC LIMIT 12").all(studentId)){let meta={};try{meta=JSON.parse(row.details||'{}');}catch{};const theme=directTheme[meta.resourceKey];if(meta.kind==='external_practice'&&theme)recommended.add(theme);}
+  const rows=db.prepare("SELECT id,themes_json AS themesJson FROM practice_bank_puzzles WHERE active=1").all();
   const firstAttempts=db.prepare(`SELECT a.puzzle_id AS puzzleId,a.correct,p.themes_json AS themesJson FROM practice_bank_attempts a JOIN practice_bank_puzzles p ON p.id=a.puzzle_id WHERE a.student_id=? AND a.rowid=(SELECT MIN(x.rowid) FROM practice_bank_attempts x WHERE x.student_id=a.student_id AND x.puzzle_id=a.puzzle_id)`).all(studentId);
   return practiceThemeCodes.map(theme=>{const total=rows.filter(r=>parse(r.themesJson).includes(theme)).length;const attempts=firstAttempts.filter(r=>parse(r.themesJson).includes(theme));const correct=attempts.filter(r=>r.correct).length;return {theme,total,attempts:attempts.length,correct,accuracy:attempts.length?Math.round(correct/attempts.length*100):null,recommended:recommended.has(theme)};}).filter(x=>x.total>0).sort((a,b)=>Number(b.recommended)-Number(a.recommended)||b.total-a.total);
 }
