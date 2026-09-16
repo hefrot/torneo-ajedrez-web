@@ -44,7 +44,7 @@ test('Smayan-like pilot flows from reliable Chess.com rating through assessment 
     if(result1200?.completed)break;
   }
   assert.equal(result1200.placementBandCode,'hmena-1200-1600');assert.equal(result1200.summary.cleared1200,true);
-  journey=familyJourney(db,student.id,{locale:'en'});assert.equal(journey.mission.kind,'practice');assert.equal(journey.completed,1);
+  journey=familyJourney(db,student.id,{locale:'en'});assert.equal(journey.mission.kind,'assessment');assert.equal(journey.mission.diagnosticLevel,'advanced');assert.equal(journey.completed,0);
   const catalog=cisBotCatalog(db,student.id,{locale:'en'});assert.equal(catalog.recommendedCode,'king-strategist');
   assert.equal(catalog.bots.find(b=>b.code==='king-strategist').unlocked,true);
   const skills=db.prepare('SELECT status FROM student_skills WHERE student_id=?').all(student.id);

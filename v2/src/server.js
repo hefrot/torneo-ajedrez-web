@@ -31,6 +31,7 @@ import {linkStudentVerifiedAccount} from './student-platform-link.js';
 import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from './training-intelligence.js';
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
 import {seedDiagnostic1200,startDiagnostic1200,diagnostic1200State,submitDiagnostic1200Answer} from './diagnostic-1200.js';
+import {seedAdvancedDiagnostics,startAdvancedDiagnostic,advancedDiagnosticState,submitAdvancedDiagnosticAnswer} from './diagnostic-advanced.js';
 import {course0800Overview} from './hmena-course.js';
 import {course1200Overview} from './hmena-course-1200.js';
 import {nextLessonRecommendation,recordCoachLessonDecision,latestApprovedPlan} from './next-lesson-engine.js';
@@ -104,6 +105,9 @@ app.post('/api/portal/diagnostic/:id/answer',portalOnly,(req,res)=>{try{res.json
 app.post('/api/portal/students/:id/diagnostic-1200/start',portalOnly,(req,res)=>{try{seedDiagnostic1200(db);res.status(201).json(startDiagnostic1200(db,{accountId:req.portalAuth.accountId,studentId:req.params.id,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/portal/diagnostic-1200/:id',portalOnly,(req,res)=>{const state=diagnostic1200State(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,locale:req.query?.locale||req.portalAuth.preferredLocale||'en'});if(!state)return res.status(404).json({error:'diagnostic not found'});res.json(state);});
 app.post('/api/portal/diagnostic-1200/:id/answer',portalOnly,(req,res)=>{try{res.json(submitDiagnostic1200Answer(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,itemId:req.body?.itemId,answerKey:req.body?.answerKey,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/portal/students/:id/diagnostic-advanced/start',portalOnly,(req,res)=>{try{seedAdvancedDiagnostics(db);res.status(201).json(startAdvancedDiagnostic(db,{accountId:req.portalAuth.accountId,studentId:req.params.id,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
+app.get('/api/portal/diagnostic-advanced/:id',portalOnly,(req,res)=>{const state=advancedDiagnosticState(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,locale:req.query?.locale||req.portalAuth.preferredLocale||'en'});if(!state)return res.status(404).json({error:'diagnostic not found'});res.json(state);});
+app.post('/api/portal/diagnostic-advanced/:id/answer',portalOnly,(req,res)=>{try{res.json(submitAdvancedDiagnosticAnswer(db,{accountId:req.portalAuth.accountId,attemptId:req.params.id,itemId:req.body?.itemId,answerKey:req.body?.answerKey,locale:req.body?.locale||req.portalAuth.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/config',(_q,res)=>{
   const control=getSeasonControl(db);
   const rules=leagueRuleMap(db);res.json({seasonName:process.env.SEASON_NAME||'HMENA Chess League 2026',gamesPerOpponent:rules.games_per_opponent,scoring:rules.scoring,minActivityHours:24,playAhead:true,automatic24hForfeit:false,registrationRequiresVerifiedPlatformAccount:true,ownershipPolicy:rules.ownership_requirement,registrationOpen:control.registration_state==='OPEN',registrationState:control.registration_state,seasonStatus:control.season_status});
