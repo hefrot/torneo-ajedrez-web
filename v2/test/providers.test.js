@@ -62,3 +62,21 @@ test('chessComRating selects the first available preferred rating', () => {
     { type: 'chess_blitz', rating: 1337 },
   );
 });
+test('Chess.com latest-games stops after enough recent games and returns newest 50', async () => {
+  const calls=[];
+  const archives=['https://api.chess.com/pub/player/u/games/2026/06','https://api.chess.com/pub/player/u/games/2026/07','https://api.chess.com/pub/player/u/games/2026/08','https://api.chess.com/pub/player/u/games/2026/09'];
+  const mk=(start,count)=>Array.from({length:count},(_,i)=>({uuid:`g${start+i}`,end_time:start+i}));
+  const payloads={
+    '/player/u/games/2026/09':{games:mk(300,30)},
+    '/player/u/games/2026/08':{games:mk(200,25)},
+    '/player/u/games/2026/07':{games:mk(100,25)},
+  };
+  const client=new ChessComClient({userAgent:'HMENA-test/1.0',throttleMs:0,sleepImpl:async()=>{},fetchImpl:async url=>{
+    const path=url.replace('https://api.chess.com/pub','');calls.push(path);
+    if(path==='/player/u/games/archives')return response(200,{archives});
+    return response(200,payloads[path]||{games:[]});
+  }});
+  const games=await client.getLatestGames('u',50,12);
+  assert.equal(games.length,50);assert.equal(games[0].uuid,'g329');assert.equal(games.at(-1).uuid,'g205');
+  assert.deepEqual(calls,['/player/u/games/archives','/player/u/games/2026/09','/player/u/games/2026/08']);
+});

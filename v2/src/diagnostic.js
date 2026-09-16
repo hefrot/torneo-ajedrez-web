@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {HMENA_FRAMEWORK_ID,placeStudentInHmena} from './hmena-curriculum.js';
+import {studentPlayStyleProfile} from './play-style-profile.js';
 
 export const DIAGNOSTIC_CODE='hmena-0-800-v1';
 const FOUNDATION_PASS=75;
@@ -51,25 +52,31 @@ const scoreStage=(db,attemptId,stage)=>{const row=db.prepare(`SELECT COUNT(*) AS
 const authorizedStudent=(db,accountId,studentId)=>Boolean(db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(accountId,studentId));
 
 const ratingSeedThresholds={lichess:{rapid:1100,classical:1050},chesscom:{rapid:850}};
+const speedSeedThresholds={lichess:{bullet:1500,blitz:1450},chesscom:{bullet:1200,blitz:1100}};
 export function diagnosticEntryPoint(db,studentId){
   const student=db.prepare('SELECT player_id AS playerId FROM students WHERE id=?').get(studentId);if(!student)return null;
+  const playStyle=studentPlayStyleProfile(db,studentId);
   const signals=[];
   if(student.playerId){
-    const rows=db.prepare(`SELECT platform,rating_type AS ratingType,rating,games_count AS gamesCount,rating_deviation AS ratingDeviation,provisional,captured_at AS capturedAt FROM external_rating_snapshots WHERE player_id=? AND rating_type IN ('rapid','classical') ORDER BY captured_at DESC`).all(student.playerId);
+    const rows=db.prepare(`SELECT platform,rating_type AS ratingType,rating,games_count AS gamesCount,rating_deviation AS ratingDeviation,provisional,captured_at AS capturedAt FROM external_rating_snapshots WHERE player_id=? AND rating_type IN ('rapid','classical','bullet','blitz') ORDER BY captured_at DESC`).all(student.playerId);
     const seen=new Set();
     for(const row of rows){
       const key=`${row.platform}:${row.ratingType}`;if(seen.has(key))continue;seen.add(key);
-      const threshold=ratingSeedThresholds[row.platform]?.[row.ratingType];if(!threshold)continue;
+      const speedMode=['bullet','blitz'].includes(row.ratingType);
+      if(speedMode&&!(playStyle?.sufficient&&playStyle.dominantMode===row.ratingType))continue;
+      const threshold=(speedMode?speedSeedThresholds:ratingSeedThresholds)[row.platform]?.[row.ratingType];if(!threshold)continue;
       const games=Number(row.gamesCount||0),rd=row.ratingDeviation==null?null:Number(row.ratingDeviation);
-      const reliable=row.platform==='lichess'?(row.provisional!==1&&rd!=null&&rd<110):(row.platform==='chesscom'?games>=20:false);
-      signals.push({...row,threshold,reliable,qualifies:reliable&&Number(row.rating)>=threshold,reliabilityReason:reliable?'stable':row.platform==='lichess'?'provisional_or_high_rd':'insufficient_games'});
+      const reliable=speedMode
+        ?(row.platform==='lichess'?(row.provisional!==1&&rd!=null&&rd<120&&games>=50):(row.platform==='chesscom'?games>=(row.ratingType==='bullet'?100:50):false))
+        :(row.platform==='lichess'?(row.provisional!==1&&rd!=null&&rd<110):(row.platform==='chesscom'?games>=20:false));
+      signals.push({...row,threshold,reliable,qualifies:reliable&&Number(row.rating)>=threshold,signalRole:speedMode?'style_seed':'standard_seed',reliabilityReason:reliable?'stable':row.platform==='lichess'?'provisional_or_high_rd':'insufficient_games'});
     }
   }
   const qualifying=signals.filter(x=>x.qualifies);
-  if(qualifying.length)return {stage:'development',basis:'rating_seed',confidence:qualifying.length>1?70:60,signals};
+  if(qualifying.length)return {stage:'development',basis:'rating_seed',confidence:qualifying.length>1?70:60,signals,playStyle};
   const placement=db.prepare(`SELECT t.code FROM student_curriculum_placements p JOIN curriculum_tracks t ON t.id=p.track_id WHERE p.student_id=? AND p.framework_id=?`).get(studentId,HMENA_FRAMEWORK_ID)?.code;
   if(placement&&placement!=='hmena-0-400')return {stage:'development',basis:'coach',confidence:55,signals,placement};
-  return {stage:'foundations',basis:'standard',confidence:50,signals,placement:placement||null};
+  return {stage:'foundations',basis:'standard',confidence:50,signals,placement:placement||null,playStyle};
 }
 
 export function startDiagnostic0800(db,{accountId,studentId,locale='en'}={}){
@@ -77,7 +84,7 @@ export function startDiagnostic0800(db,{accountId,studentId,locale='en'}={}){
   const active=db.prepare("SELECT id,status,stage,entry_stage AS entryStage,entry_basis AS entryBasis,entry_evidence_json AS entryEvidenceJson FROM diagnostic_attempts WHERE student_id=? AND blueprint_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId,blueprint());
   if(active)return {attemptId:active.id,status:active.status,stage:active.stage,entryStage:active.entryStage,entryBasis:active.entryBasis,entryEvidence:JSON.parse(active.entryEvidenceJson||'{}'),reused:true};
   const entry=diagnosticEntryPoint(db,studentId)||{stage:'foundations',basis:'standard',confidence:50,signals:[]};
-  const id=attemptId(),evidence={confidence:entry.confidence,signals:entry.signals||[],placement:entry.placement||null};
+  const id=attemptId(),evidence={confidence:entry.confidence,signals:entry.signals||[],placement:entry.placement||null,playStyle:entry.playStyle||studentPlayStyleProfile(db,studentId)};
   db.prepare(`INSERT INTO diagnostic_attempts(id,student_id,blueprint_id,locale,status,stage,entry_stage,entry_basis,entry_evidence_json,started_at) VALUES (?,?,?,?,'in_progress',?,?,?,?,CURRENT_TIMESTAMP)`).run(id,studentId,blueprint(),localeOf(locale),entry.stage,entry.stage,entry.basis,JSON.stringify(evidence));
   return {attemptId:id,status:'in_progress',stage:entry.stage,entryStage:entry.stage,entryBasis:entry.basis,entryEvidence:evidence,reused:false};
 }

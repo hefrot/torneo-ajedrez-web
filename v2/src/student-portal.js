@@ -10,6 +10,7 @@ import {familyJourney} from './family-journey.js';
 import {syncPracticeMissions} from './practice-plan.js';
 import {practiceThemeCatalog} from './practice-bank.js';
 import {studentPracticeBank} from './practice-bank.js';
+import {studentPlayStyleProfile} from './play-style-profile.js';
 
 export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
   const account=db.prepare("SELECT id,login_name AS loginName,display_name AS displayName,role,preferred_locale AS preferredLocale FROM portal_accounts WHERE id=? AND status='active'").get(accountId);
@@ -26,6 +27,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     placement,
     priorities:learning.priorities,
     ratings:studentRatingProgress(db,student.id),
+    playStyle:studentPlayStyleProfile(db,student.id),
     training,
     nextPlan:(()=>{const plan=latestApprovedPlan(db,student.id,{locale});return plan?{id:plan.id,decision:plan.decision,lesson:plan.lesson,skill:plan.skill,createdAt:plan.createdAt}:null;})(),
     openingTrainer:studentOpeningProfile(db,student.id,{locale}),

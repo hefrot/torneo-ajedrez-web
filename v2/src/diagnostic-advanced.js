@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {HMENA_FRAMEWORK_ID,getHmenaPlacement,placeStudentInHmena} from './hmena-curriculum.js';
+import {studentPlayStyleProfile} from './play-style-profile.js';
 
 const DATA=JSON.parse(fs.readFileSync(new URL('../data/advanced-diagnostic-items-v1.json',import.meta.url),'utf8'));
 const PASS_COUNT=5;
@@ -45,9 +46,10 @@ export function startAdvancedDiagnostic(db,{accountId,studentId,locale='en'}={})
   if(active)return {attemptId:active.id,status:active.status,band,reused:true};
   const completed=db.prepare("SELECT id,status,summary_json AS summaryJson FROM diagnostic_attempts WHERE student_id=? AND blueprint_id=? AND status='completed' ORDER BY completed_at DESC LIMIT 1").get(studentId,m.id);
   if(completed)return {attemptId:completed.id,status:completed.status,band,reused:true,completed:true,summary:JSON.parse(completed.summaryJson||'{}')};
-  const id=`DIAG-${randomUUID()}`;
-  db.prepare(`INSERT INTO diagnostic_attempts(id,student_id,blueprint_id,locale,status,stage,entry_stage,entry_basis,entry_evidence_json,started_at) VALUES (?,?,?,?,'in_progress','development','development','standard','{}',CURRENT_TIMESTAMP)`).run(id,studentId,m.id,localeOf(locale));
-  return {attemptId:id,status:'in_progress',band,reused:false};
+  const id=`DIAG-${randomUUID()}`,playStyle=studentPlayStyleProfile(db,studentId);
+  const evidence={playStyle,assessmentEmphasis:playStyle?.assessmentEmphasis||null};
+  db.prepare(`INSERT INTO diagnostic_attempts(id,student_id,blueprint_id,locale,status,stage,entry_stage,entry_basis,entry_evidence_json,started_at) VALUES (?,?,?,?,'in_progress','development','development','standard',?,CURRENT_TIMESTAMP)`).run(id,studentId,m.id,localeOf(locale),JSON.stringify(evidence));
+  return {attemptId:id,status:'in_progress',band,entryEvidence:evidence,reused:false};
 }
 
 function localGap(db,locale,code){
@@ -56,9 +58,10 @@ function localGap(db,locale,code){
 }
 
 export function advancedDiagnosticState(db,{accountId,attemptId,locale='en'}={}){
-  const attempt=db.prepare(`SELECT a.id,a.student_id AS studentId,a.blueprint_id AS blueprintId,a.status,a.placement_band_code AS placementBandCode,a.summary_json AS summaryJson,b.code AS blueprintCode FROM diagnostic_attempts a JOIN diagnostic_blueprints b ON b.id=a.blueprint_id WHERE a.id=?`).get(attemptId);
+  const attempt=db.prepare(`SELECT a.id,a.student_id AS studentId,a.blueprint_id AS blueprintId,a.status,a.placement_band_code AS placementBandCode,a.summary_json AS summaryJson,a.entry_evidence_json AS entryEvidenceJson,b.code AS blueprintCode FROM diagnostic_attempts a JOIN diagnostic_blueprints b ON b.id=a.blueprint_id WHERE a.id=?`).get(attemptId);
   if(!attempt||!authorized(db,accountId,attempt.studentId)||!Object.values(meta).some(x=>x.id===attempt.blueprintId))return null;
   const band=Object.entries(meta).find(([,m])=>m.id===attempt.blueprintId)?.[0]||null;
+  attempt.entryEvidence=JSON.parse(attempt.entryEvidenceJson||'{}');delete attempt.entryEvidenceJson;
   if(attempt.status==='completed'){
     const summary=JSON.parse(attempt.summaryJson||'{}');summary.gaps=(summary.gaps||[]).map(g=>({...g,title:localGap(db,locale,g.code)}));
     return {...attempt,band,summary,item:null};

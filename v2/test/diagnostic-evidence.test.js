@@ -83,3 +83,12 @@ test('rating-seeded diagnostic presents anchor checks before Development',()=>{
   const state=diagnosticState(db,{accountId:portal.accountId,attemptId:start.attemptId,locale:'en'});
   assert.equal(state.item.isAnchor,true);assert.ok(state.item.fen);db.close();
 });
+test('Bullet-dominant recent play can seed Development but still requires anchor checks',()=>{
+  const {db,student,portal}=setup();
+  const linked=linkStudentVerifiedAccount(db,student.id,{verified:true,platform:'lichess',username:'bulletkid',usernameNormalized:'bulletkid',verificationSource:'test',verifiedAt:'2026-09-15T20:00:00Z'});
+  const account=db.prepare("SELECT id FROM player_accounts WHERE player_id=? AND platform='lichess'").get(linked.playerId);
+  saveDailyRatings(db,{accountId:account.id,playerId:linked.playerId,platform:'lichess'},[{ratingType:'bullet',rating:1900,gamesCount:800,ratingDeviation:70,provisional:false}],{now:new Date('2026-09-15T21:00:00Z')});
+  for(let i=0;i<50;i++)db.prepare(`INSERT INTO academic_external_games(id,student_id,account_id,platform,external_game_id,played_at,time_class,analysis_status) VALUES (?,?,?,?,?,?,?,'analyzed')`).run(`BG${i}`,student.id,account.id,'lichess',`bext${i}`,new Date(Date.UTC(2026,8,16,0,i)).toISOString(),i<40?'bullet':'blitz');
+  const entry=diagnosticEntryPoint(db,student.id);assert.equal(entry.stage,'development');assert.equal(entry.playStyle.style,'bullet');assert.equal(entry.signals[0].signalRole,'style_seed');assert.equal(entry.signals[0].qualifies,true);
+  const start=startDiagnostic0800(db,{accountId:portal.accountId,studentId:student.id});const state=diagnosticState(db,{accountId:portal.accountId,attemptId:start.attemptId,locale:'en'});assert.equal(state.item.isAnchor,true);db.close();
+});

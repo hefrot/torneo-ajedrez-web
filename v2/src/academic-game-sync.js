@@ -73,7 +73,7 @@ export async function syncAcademicGameMetadata(db,{lichessClient,chessComClient,
         games=await lichessClient.getGames(account.username,{since,max:maxPerAccount,moves:true,opening:true,pgnInJson:true});
         games=games.map(g=>normalizeLichessAcademicGame(g,account)).filter(Boolean);
       }else if(account.platform==='chesscom'&&chessComClient){
-        const all=await chessComClient.getRecentGames(account.username,months);
+        const all=chessComClient.getLatestGames?await chessComClient.getLatestGames(account.username,maxPerAccount,Math.max(months,12)):await chessComClient.getRecentGames(account.username,months);
         games=all.map(g=>normalizeChessComAcademicGame(g,account)).filter(Boolean).sort((a,b)=>String(b.playedAt||'').localeCompare(String(a.playedAt||''))).slice(0,maxPerAccount);
       }
       fetched+=games.length;

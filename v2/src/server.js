@@ -29,6 +29,7 @@ import {studentPortalDashboard} from './student-portal.js';
 import {studentRatingProgress,captureVerifiedAccountRatings} from './rating-tracking.js';
 import {linkStudentVerifiedAccount} from './student-platform-link.js';
 import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from './training-intelligence.js';
+import {studentPlayStyleProfile} from './play-style-profile.js';
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
 import {seedDiagnostic1200,startDiagnostic1200,diagnostic1200State,submitDiagnostic1200Answer} from './diagnostic-1200.js';
 import {seedAdvancedDiagnostics,startAdvancedDiagnostic,advancedDiagnosticState,submitAdvancedDiagnosticAnswer} from './diagnostic-advanced.js';
@@ -192,10 +193,11 @@ app.post('/api/admin/students/:id/sync-games',staffOnly,async(req,res,next)=>{tr
   const student=db.prepare('SELECT id FROM students WHERE id=? AND status!=\'archived\'').get(req.params.id);if(!student)return res.status(404).json({error:'student not found'});
   if(req.body?.reanalyze===true)db.prepare("UPDATE academic_external_games SET analysis_status='pending',analysis_error=NULL WHERE student_id=? AND analysis_status='analyzed'").run(req.params.id);
   let chessComClient=null;try{chessComClient=new ChessComClient();}catch{}
-  const result=await syncAndAnalyzeAcademicGames(db,{studentId:req.params.id,lichessClient:new LichessClient(),chessComClient,analyzeGame:analyzeAcademicGame,maxPerAccount:Math.max(1,Math.min(50,Number(req.body?.maxPerAccount)||30)),analysisLimit:Math.max(1,Math.min(30,Number(req.body?.analysisLimit)||12)),months:Math.max(1,Math.min(12,Number(req.body?.months)||2))});
+  const result=await syncAndAnalyzeAcademicGames(db,{studentId:req.params.id,lichessClient:new LichessClient(),chessComClient,analyzeGame:analyzeAcademicGame,maxPerAccount:Math.max(1,Math.min(50,Number(req.body?.maxPerAccount)||50)),analysisLimit:Math.max(1,Math.min(50,Number(req.body?.analysisLimit)||50)),months:Math.max(1,Math.min(12,Number(req.body?.months)||2))});
   res.json(result);
 }catch(error){next(error);}});
 app.get('/api/admin/students/:id/rating-progress',staffOnly,(req,res)=>{const data=studentRatingProgress(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
+app.get('/api/admin/students/:id/play-style',staffOnly,(req,res)=>{const data=studentPlayStyleProfile(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students/:id/training-intelligence',staffOnly,(req,res)=>{const data=studentTrainingIntelligence(db,req.params.id,{locale:req.query?.locale||'en',includeTechnical:true});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students/:id/opening-trainer',staffOnly,(req,res)=>{const data=studentOpeningProfile(db,req.params.id,{locale:req.query?.locale||'en'});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.post('/api/admin/students/:id/game-reviews',staffOnly,(req,res)=>{try{res.status(201).json(recordStudentGameReview(db,{studentId:req.params.id,...req.body}));}catch(error){res.status(400).json({error:error.message});}});

@@ -72,6 +72,21 @@ export class ChessComClient {
     return batches;
   }
 
+  async getLatestGames(username, maxGames = 50, maxMonths = 12) {
+    const target = Math.max(1, Math.min(200, Number(maxGames) || 50));
+    const monthCap = Math.max(1, Math.min(24, Number(maxMonths) || 12));
+    const { archives = [] } = await this.getArchives(username);
+    const selected = archives.slice(-monthCap).reverse();
+    const games = [];
+    for (const archiveUrl of selected) {
+      const path = archiveUrl.replace('https://api.chess.com/pub', '');
+      const payload = await this.request(path);
+      games.push(...(payload.games ?? []));
+      if (games.length >= target) break;
+    }
+    return games.sort((a,b)=>Number(b.end_time||b.start_time||0)-Number(a.end_time||a.start_time||0)).slice(0,target);
+  }
+
   async findGame(username, externalGameId, months = 3) {
     const games = await this.getRecentGames(username, months);
     return games.find(game => game.url?.match(/\/(\d+)(?:\/?$|\?)/)?.[1] === String(externalGameId)

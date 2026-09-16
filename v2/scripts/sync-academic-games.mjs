@@ -8,6 +8,6 @@ const db=openDatabase();
 const lichessClient=new LichessClient();
 let chessComClient=null;try{chessComClient=new ChessComClient();}catch{}
 try{
-  const result=await syncAndAnalyzeAcademicGames(db,{lichessClient,chessComClient,analyzeGame:analyzeAcademicGame,maxPerAccount:Number(process.env.ACADEMIC_GAME_FETCH_LIMIT||30),analysisLimit:Number(process.env.ACADEMIC_GAME_ANALYSIS_LIMIT||12),months:Number(process.env.ACADEMIC_CHESSCOM_MONTHS||2)});
+  const result=await syncAndAnalyzeAcademicGames(db,{lichessClient,chessComClient,analyzeGame:analyzeAcademicGame,maxPerAccount:Number(process.env.ACADEMIC_GAME_FETCH_LIMIT||50),analysisLimit:Number(process.env.ACADEMIC_GAME_ANALYSIS_LIMIT||50),months:Number(process.env.ACADEMIC_CHESSCOM_MONTHS||2)});
   console.log(JSON.stringify(result));
 }finally{db.close();}
