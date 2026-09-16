@@ -198,6 +198,16 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'academic-diagnostic-entry-v12',
+    run(db){
+      if(!hasColumn(db,'diagnostic_attempts','entry_stage')) db.exec("ALTER TABLE diagnostic_attempts ADD COLUMN entry_stage TEXT NOT NULL DEFAULT 'foundations' CHECK(entry_stage IN ('foundations','development'))");
+      if(!hasColumn(db,'diagnostic_attempts','entry_basis')) db.exec("ALTER TABLE diagnostic_attempts ADD COLUMN entry_basis TEXT NOT NULL DEFAULT 'standard' CHECK(entry_basis IN ('standard','rating_seed','coach'))");
+      if(!hasColumn(db,'diagnostic_attempts','entry_evidence_json')) db.exec("ALTER TABLE diagnostic_attempts ADD COLUMN entry_evidence_json TEXT NOT NULL DEFAULT '{}'");
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

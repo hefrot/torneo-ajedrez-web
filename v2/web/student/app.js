@@ -64,13 +64,17 @@ function renderDiagnostic(state){
   $('#diagnostic-title').textContent=t('diagnostic');$('#diagnostic-close').textContent=t('close');
   if(state.status==='completed'){
     const sum=state.summary||{};const gaps=(sum.gaps||[]).map(g=>`<li><strong>${esc(g.title||g.code)}</strong></li>`).join('')||`<li>${t('noGaps')}</li>`;
-    $('#diagnostic-body').innerHTML=`<div class="diagnostic-result"><span class="eyebrow">${t('diagnosticDone')}</span><h2>${t('placementResult')}: ${esc(state.placementBandCode||'—')}</h2><div class="profile-stats"><article><strong>${sum.foundations?.percent??0}%</strong><span>${t('foundations')}</span></article><article><strong>${sum.development?.total?sum.development.percent+'%':'—'}</strong><span>${t('development')}</span></article><article><strong>${sum.cleared0800?'800+':'—'}</strong><span>${sum.cleared0800?t('ready800'):t('score')}</span></article></div><h3>${t('gaps')}</h3><ul>${gaps}</ul></div>`;
+    const foundationValue=sum.foundations?.skipped?'—':`${sum.foundations?.percent??0}%`;
+    const seedNote=state.entryBasis==='rating_seed'?`<div class="next-lesson-box"><small>${t('foundationSkipped')}</small><p>${t('ratingSeed')}</p></div>`:'';
+    const checkNote=sum.foundationCheckRecommended?`<div class="next-lesson-box status-warn"><strong>${t('foundationCheck')}</strong></div>`:'';
+    $('#diagnostic-body').innerHTML=`<div class="diagnostic-result"><span class="eyebrow">${t('diagnosticDone')}</span><h2>${t('placementResult')}: ${esc(state.placementBandCode||'—')}</h2>${seedNote}<div class="profile-stats"><article><strong>${foundationValue}</strong><span>${t('foundations')}</span></article><article><strong>${sum.development?.total?sum.development.percent+'%':'—'}</strong><span>${t('development')}</span></article><article><strong>${sum.cleared0800?'800+':'—'}</strong><span>${sum.cleared0800?t('ready800'):t('score')}</span></article></div>${checkNote}<h3>${t('gaps')}</h3><ul>${gaps}</ul></div>`;
     return;
   }
   const q=state.item;if(!q){$('#diagnostic-body').innerHTML='<div class="empty">—</div>';return;}
   const stageLabel=q.stage==='foundations'?t('foundations'):t('development');
   const options=q.options.map((option,index)=>{const key=String.fromCharCode(65+index);return `<label class="diagnostic-option"><input type="radio" name="diagnostic-answer" value="${key}"><span><strong>${key}.</strong> ${esc(option)}</span></label>`}).join('');
-  $('#diagnostic-body').innerHTML=`<div class="diagnostic-progress"><span>${stageLabel}</span><strong>${t('question')} ${q.sequence}</strong></div><h2 class="diagnostic-prompt">${esc(q.prompt)}</h2><form id="diagnostic-form" data-item-id="${esc(q.id)}">${options}<button class="btn btn-primary" type="submit">${t('answer')}</button></form>`;
+  const seedNote=state.entryBasis==='rating_seed'?`<div class="next-lesson-box"><small>${t('foundationSkipped')}</small><p>${t('ratingSeed')}</p></div>`:'';
+  $('#diagnostic-body').innerHTML=`${seedNote}<div class="diagnostic-progress"><span>${stageLabel}</span><strong>${t('question')} ${q.sequence}</strong></div><h2 class="diagnostic-prompt">${esc(q.prompt)}</h2><form id="diagnostic-form" data-item-id="${esc(q.id)}">${options}<button class="btn btn-primary" type="submit">${t('answer')}</button></form>`;
 }
 async function openDiagnostic(studentId){
   const start=await api(`../api/portal/students/${encodeURIComponent(studentId)}/diagnostic/start`,{method:'POST',body:JSON.stringify({locale})});activeDiagnosticId=start.attemptId;

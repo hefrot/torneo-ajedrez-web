@@ -5,7 +5,9 @@ import {createStudent} from '../src/academic.js';
 import {createPortalAccount} from '../src/student-portal-access.js';
 import {seedAllCurriculum} from '../src/curriculum.js';
 import {seedHmenaFramework,mapLegacyToHmena} from '../src/hmena-curriculum.js';
-import {seedDiagnostic0800,startDiagnostic0800,submitDiagnosticAnswer} from '../src/diagnostic.js';
+import {seedDiagnostic0800,startDiagnostic0800,submitDiagnosticAnswer,diagnosticEntryPoint} from '../src/diagnostic.js';
+import {linkStudentVerifiedAccount} from '../src/student-platform-link.js';
+import {saveDailyRatings} from '../src/rating-tracking.js';
 
 function setup(){
   const db=openDatabase(':memory:');
@@ -35,5 +37,32 @@ test('diagnostic does not downgrade stronger prior evidence',()=>{
   for(const item of items)submitDiagnosticAnswer(db,{accountId:portal.accountId,attemptId,itemId:item.id,answerKey:item.correctAnswer==='A'?'B':'A'});
   const row=db.prepare('SELECT status,confidence FROM student_skills WHERE student_id=? AND skill_id=?').get(student.id,skill.id);
   assert.equal(row.status,'drill_mastered');assert.equal(row.confidence,95);
+  db.close();
+});
+
+
+function linkRated(db,student,platform,username,rating){
+  const linked=linkStudentVerifiedAccount(db,student.id,{verified:true,platform,username,usernameNormalized:username.toLowerCase(),verificationSource:'test',verifiedAt:'2026-09-15T20:00:00Z'});
+  const account=db.prepare('SELECT id FROM player_accounts WHERE player_id=? AND platform=? AND username_normalized=?').get(linked.playerId,platform,username.toLowerCase());
+  saveDailyRatings(db,{accountId:account.id,playerId:linked.playerId,platform},[{ratingType:'rapid',rating,gamesCount:100}],{now:new Date('2026-09-15T21:00:00Z')});
+}
+
+test('1200 Lichess and 1000 Chess.com seed diagnostic at Development, not Foundations',()=>{
+  const {db,student,portal}=setup();
+  linkRated(db,student,'lichess','ratedkid',1200);linkRated(db,student,'chesscom','ratedkidcc',1000);
+  const entry=diagnosticEntryPoint(db,student.id);assert.equal(entry.stage,'development');assert.equal(entry.basis,'rating_seed');assert.equal(entry.signals.filter(x=>x.qualifies).length,2);
+  const start=startDiagnostic0800(db,{accountId:portal.accountId,studentId:student.id});assert.equal(start.stage,'development');assert.equal(start.entryBasis,'rating_seed');
+  const items=db.prepare("SELECT id,correct_answer AS correctAnswer FROM diagnostic_items WHERE stage='development' ORDER BY sequence_no").all();
+  let result;for(const item of items)result=submitDiagnosticAnswer(db,{accountId:portal.accountId,attemptId:start.attemptId,itemId:item.id,answerKey:item.correctAnswer});
+  assert.equal(result.placementBandCode,'hmena-800-1200');assert.equal(result.summary.foundations.skipped,true);assert.equal(result.summary.development.percent,100);
+  db.close();
+});
+
+test('rating-seeded student who fails Development lands in 400-800 instead of repeating 0-400',()=>{
+  const {db,student,portal}=setup();linkRated(db,student,'lichess','ratedkid2',1200);
+  const start=startDiagnostic0800(db,{accountId:portal.accountId,studentId:student.id});
+  const items=db.prepare("SELECT id,correct_answer AS correctAnswer FROM diagnostic_items WHERE stage='development' ORDER BY sequence_no").all();
+  let result;for(const item of items)result=submitDiagnosticAnswer(db,{accountId:portal.accountId,attemptId:start.attemptId,itemId:item.id,answerKey:item.correctAnswer==='A'?'B':'A'});
+  assert.equal(result.placementBandCode,'hmena-400-800');assert.equal(result.summary.foundationCheckRecommended,true);
   db.close();
 });

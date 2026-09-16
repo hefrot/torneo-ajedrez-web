@@ -25,6 +25,22 @@ export function saveDailyRatings(db,account,ratings,{now=new Date()}={}){
   let saved=0; for(const row of ratings){upsert.run(account.accountId,account.playerId,account.platform,row.ratingType,row.rating,row.gamesCount??null,day,capturedAt);saved+=1;}
   return saved;
 }
+
+export async function captureVerifiedAccountRatings(db,{playerId,platform,username,lichessClient,chessComClient,now=new Date()}={}){
+  const account=db.prepare(`SELECT id AS accountId,player_id AS playerId,platform,username FROM player_accounts WHERE player_id=? AND platform=? AND lower(username_normalized)=lower(?) AND account_status='verified' ORDER BY verified_at DESC LIMIT 1`).get(playerId,platform,String(username||''));
+  if(!account)throw new TypeError('verified account not found');
+  let ratings=[];
+  if(platform==='lichess'){
+    if(!lichessClient)throw new TypeError('lichess client required');
+    ratings=lichessRatings(await lichessClient.getUser(account.username));
+  }else if(platform==='chesscom'){
+    if(!chessComClient)throw new TypeError('chess.com client required');
+    ratings=chessComRatings(await chessComClient.getStats(account.username));
+  }else throw new TypeError('invalid platform');
+  const saved=saveDailyRatings(db,account,ratings,{now});
+  return {accountId:account.accountId,playerId:account.playerId,platform,username:account.username,saved,ratings};
+}
+
 export async function syncAcademicRatings(db,{lichessClient,chessComClient,now=new Date()}={}){
   const accounts=db.prepare(`SELECT DISTINCT pa.id AS accountId,pa.player_id AS playerId,pa.platform,pa.username
     FROM students s JOIN player_accounts pa ON pa.player_id=s.player_id

@@ -39,23 +39,40 @@ export function seedDiagnostic0800(db){
   db.transaction(()=>{for(const row of rows){const sid=skillIdByCode(db,row.skillCode);if(!sid)throw new Error(`missing skill ${row.skillCode}`);item.run(row.id,sid,row.stage,row.sequence,row.correct);for(const locale of ['en','es'])loc.run(row.id,locale,row.prompt[locale],JSON.stringify(row.options[locale]));}})();
   return {code:DIAGNOSTIC_CODE,items:rows.length,foundations:rows.filter(x=>x.stage==='foundations').length,development:rows.filter(x=>x.stage==='development').length};
 }const blueprint=()=> 'DIAG-HMENA-0-800';
-const itemForClient=(row,locale)=>({id:row.id,skillCode:row.skill_code,stage:row.stage,sequence:row.sequence_no,prompt:row.prompt,options:JSON.parse(row.options_json||'[]')});
+const itemForClient=(row,locale)=>({id:row.id,skillCode:row.skill_code,stage:row.stage,sequence:row.stage==='development'?row.sequence_no-11:row.sequence_no,prompt:row.prompt,options:JSON.parse(row.options_json||'[]')});
 const scoreStage=(db,attemptId,stage)=>{const row=db.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN r.correct=1 THEN 1 ELSE 0 END) AS correct FROM diagnostic_items i LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND i.active=1`).get(attemptId,blueprint(),stage);return {correct:Number(row.correct||0),total:Number(row.total||0),percent:row.total?Math.round((Number(row.correct||0)/Number(row.total))*100):0};};
 const authorizedStudent=(db,accountId,studentId)=>Boolean(db.prepare('SELECT 1 FROM portal_account_students WHERE account_id=? AND student_id=?').get(accountId,studentId));
 
+const ratingSeedThresholds={lichess:{rapid:1100,classical:1050},chesscom:{rapid:850}};
+export function diagnosticEntryPoint(db,studentId){
+  const student=db.prepare('SELECT player_id AS playerId FROM students WHERE id=?').get(studentId);if(!student)return null;
+  const signals=[];
+  if(student.playerId){
+    const rows=db.prepare(`SELECT platform,rating_type AS ratingType,rating,captured_at AS capturedAt FROM external_rating_snapshots WHERE player_id=? AND rating_type IN ('rapid','classical') ORDER BY captured_at DESC`).all(student.playerId);
+    const seen=new Set();
+    for(const row of rows){const key=`${row.platform}:${row.ratingType}`;if(seen.has(key))continue;seen.add(key);const threshold=ratingSeedThresholds[row.platform]?.[row.ratingType];if(threshold)signals.push({...row,threshold,qualifies:Number(row.rating)>=threshold});}
+  }
+  const qualifying=signals.filter(x=>x.qualifies);
+  if(qualifying.length)return {stage:'development',basis:'rating_seed',confidence:qualifying.length>1?70:60,signals};
+  const placement=db.prepare(`SELECT t.code FROM student_curriculum_placements p JOIN curriculum_tracks t ON t.id=p.track_id WHERE p.student_id=? AND p.framework_id=?`).get(studentId,HMENA_FRAMEWORK_ID)?.code;
+  if(placement&&placement!=='hmena-0-400')return {stage:'development',basis:'coach',confidence:55,signals,placement};
+  return {stage:'foundations',basis:'standard',confidence:50,signals,placement:placement||null};
+}
+
 export function startDiagnostic0800(db,{accountId,studentId,locale='en'}={}){
   if(!authorizedStudent(db,accountId,studentId))throw new TypeError('student not authorized');
-  const active=db.prepare("SELECT id,status,stage FROM diagnostic_attempts WHERE student_id=? AND blueprint_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId,blueprint());
-  if(active)return {attemptId:active.id,status:active.status,stage:active.stage,reused:true};
-  const id=attemptId();
-  db.prepare(`INSERT INTO diagnostic_attempts(id,student_id,blueprint_id,locale,status,stage,started_at) VALUES (?,?,?,?,'in_progress','foundations',CURRENT_TIMESTAMP)`).run(id,studentId,blueprint(),localeOf(locale));
-  return {attemptId:id,status:'in_progress',stage:'foundations',reused:false};
+  const active=db.prepare("SELECT id,status,stage,entry_stage AS entryStage,entry_basis AS entryBasis,entry_evidence_json AS entryEvidenceJson FROM diagnostic_attempts WHERE student_id=? AND blueprint_id=? AND status='in_progress' ORDER BY started_at DESC LIMIT 1").get(studentId,blueprint());
+  if(active)return {attemptId:active.id,status:active.status,stage:active.stage,entryStage:active.entryStage,entryBasis:active.entryBasis,entryEvidence:JSON.parse(active.entryEvidenceJson||'{}'),reused:true};
+  const entry=diagnosticEntryPoint(db,studentId)||{stage:'foundations',basis:'standard',confidence:50,signals:[]};
+  const id=attemptId(),evidence={confidence:entry.confidence,signals:entry.signals||[],placement:entry.placement||null};
+  db.prepare(`INSERT INTO diagnostic_attempts(id,student_id,blueprint_id,locale,status,stage,entry_stage,entry_basis,entry_evidence_json,started_at) VALUES (?,?,?,?,'in_progress',?,?,?,?,CURRENT_TIMESTAMP)`).run(id,studentId,blueprint(),localeOf(locale),entry.stage,entry.stage,entry.basis,JSON.stringify(evidence));
+  return {attemptId:id,status:'in_progress',stage:entry.stage,entryStage:entry.stage,entryBasis:entry.basis,entryEvidence:evidence,reused:false};
 }
 
 export function diagnosticState(db,{accountId,attemptId:aid,locale='en'}={}){
-  const attempt=db.prepare(`SELECT a.id,a.student_id AS studentId,a.status,a.stage,a.foundations_score AS foundationsScore,a.development_score AS developmentScore,a.placement_band_code AS placementBandCode,a.summary_json AS summaryJson FROM diagnostic_attempts a WHERE a.id=?`).get(aid);
+  const attempt=db.prepare(`SELECT a.id,a.student_id AS studentId,a.status,a.stage,a.entry_stage AS entryStage,a.entry_basis AS entryBasis,a.entry_evidence_json AS entryEvidenceJson,a.foundations_score AS foundationsScore,a.development_score AS developmentScore,a.placement_band_code AS placementBandCode,a.summary_json AS summaryJson FROM diagnostic_attempts a WHERE a.id=?`).get(aid);
   if(!attempt||!authorizedStudent(db,accountId,attempt.studentId))return null;
-  const lang=localeOf(locale);
+  const lang=localeOf(locale);attempt.entryEvidence=JSON.parse(attempt.entryEvidenceJson||'{}');delete attempt.entryEvidenceJson;
   if(attempt.status==='completed'){const summary=JSON.parse(attempt.summaryJson||'{}');const localize=db.prepare(`SELECT cs.code,COALESCE(cl.title,cs.title) AS title FROM curriculum_skills cs LEFT JOIN curriculum_localizations cl ON cl.entity_type='skill' AND cl.entity_id=cs.id AND cl.locale=? WHERE cs.code=?`);summary.gaps=(summary.gaps||[]).map(g=>({...g,title:localize.get(lang,g.code)?.title||g.code}));return {...attempt,summary,item:null};}
   const next=db.prepare(`SELECT i.id,i.stage,i.sequence_no,l.prompt,l.options_json,cs.code AS skill_code FROM diagnostic_items i JOIN diagnostic_item_localizations l ON l.item_id=i.id AND l.locale=? JOIN curriculum_skills cs ON cs.id=i.skill_id LEFT JOIN diagnostic_responses r ON r.item_id=i.id AND r.attempt_id=? WHERE i.blueprint_id=? AND i.stage=? AND i.active=1 AND r.item_id IS NULL ORDER BY i.sequence_no LIMIT 1`).get(lang,aid,blueprint(),attempt.stage);
   return {...attempt,item:next?itemForClient(next,lang):null};
@@ -81,15 +98,18 @@ function persistDiagnosticSkillEvidence(db,attempt){
 }
 
 function completeAttempt(db,attempt,locale){
-  const foundations=scoreStage(db,attempt.id,'foundations');
+  const skippedFoundations=attempt.entryStage==='development';
+  const foundations=skippedFoundations?{correct:null,total:0,percent:null,skipped:true}:scoreStage(db,attempt.id,'foundations');
   const development=scoreStage(db,attempt.id,'development');
-  const bandCode=foundations.percent<FOUNDATION_PASS?'hmena-0-400':development.percent>=DEVELOPMENT_PASS?'hmena-800-1200':'hmena-400-800';
-  const confidence=bandCode==='hmena-800-1200'?65:80;
+  const bandCode=skippedFoundations?(development.percent>=DEVELOPMENT_PASS?'hmena-800-1200':'hmena-400-800'):(foundations.percent<FOUNDATION_PASS?'hmena-0-400':development.percent>=DEVELOPMENT_PASS?'hmena-800-1200':'hmena-400-800');
+  const confidence=bandCode==='hmena-800-1200'?65:skippedFoundations?70:80;
   const gaps=db.prepare(`SELECT cs.code,i.stage FROM diagnostic_responses r JOIN diagnostic_items i ON i.id=r.item_id JOIN curriculum_skills cs ON cs.id=i.skill_id WHERE r.attempt_id=? AND r.correct=0 ORDER BY i.sequence_no`).all(attempt.id);
-  const summary={foundations,development,gaps,cleared0800:bandCode==='hmena-800-1200'};
+  const foundationCheckRecommended=skippedFoundations&&development.percent<45;
+  const summary={foundations,development,gaps,cleared0800:bandCode==='hmena-800-1200',entryStage:attempt.entryStage,entryBasis:attempt.entryBasis,foundationCheckRecommended};
   db.transaction(()=>{
     db.prepare(`UPDATE diagnostic_attempts SET status='completed',stage='completed',completed_at=CURRENT_TIMESTAMP,foundations_score=?,development_score=?,placement_band_code=?,summary_json=? WHERE id=?`).run(foundations.percent,development.percent,bandCode,JSON.stringify(summary),attempt.id);
-    placeStudentInHmena(db,{studentId:attempt.studentId,bandCode,source:'assessment',confidence,note:bandCode==='hmena-800-1200'?'Cleared HMENA 0–800 screening; continue with 800–1200 diagnostic.':'HMENA 0–800 adaptive diagnostic.'});
+    const note=skippedFoundations?(bandCode==='hmena-800-1200'?'Rating-seeded challenge-out cleared 400–800 screening.':'Rating-seeded screening placed student in 400–800; targeted foundation check may still be useful.'):(bandCode==='hmena-800-1200'?'Cleared HMENA 0–800 screening; continue with 800–1200 diagnostic.':'HMENA 0–800 adaptive diagnostic.');
+    placeStudentInHmena(db,{studentId:attempt.studentId,bandCode,source:'assessment',confidence,note});
     persistDiagnosticSkillEvidence(db,attempt);
     const kind=db.prepare('SELECT 1 FROM assessments WHERE student_id=? LIMIT 1').get(attempt.studentId)?'progress':'initial';
     const overallLevel=bandCode==='hmena-0-400'?200:bandCode==='hmena-400-800'?600:800;
@@ -99,7 +119,7 @@ function completeAttempt(db,attempt,locale){
 }
 
 export function submitDiagnosticAnswer(db,{accountId,attemptId:aid,itemId,answerKey,locale='en'}={}){
-  const attempt=db.prepare("SELECT id,student_id AS studentId,status,stage FROM diagnostic_attempts WHERE id=?").get(aid);
+  const attempt=db.prepare("SELECT id,student_id AS studentId,status,stage,entry_stage AS entryStage,entry_basis AS entryBasis FROM diagnostic_attempts WHERE id=?").get(aid);
   if(!attempt||!authorizedStudent(db,accountId,attempt.studentId))throw new TypeError('diagnostic not authorized');
   if(attempt.status!=='in_progress')throw new TypeError('diagnostic already completed');
   const item=db.prepare('SELECT id,stage,correct_answer AS correctAnswer FROM diagnostic_items WHERE id=? AND blueprint_id=? AND active=1').get(itemId,blueprint());

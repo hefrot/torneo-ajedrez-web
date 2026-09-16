@@ -26,7 +26,7 @@ import {getHmenaPlacement,placeStudentInHmena,recommendLearningPriorities,setHme
 import {localizedHmenaOverview,localizedLearningPriorities} from './curriculum-localization.js';
 import {createPortalAccount,loginPortalAccount,authenticatePortalSession,regeneratePortalCode,setPortalPreferredLocale} from './student-portal-access.js';
 import {studentPortalDashboard} from './student-portal.js';
-import {studentRatingProgress} from './rating-tracking.js';
+import {studentRatingProgress,captureVerifiedAccountRatings} from './rating-tracking.js';
 import {linkStudentVerifiedAccount} from './student-platform-link.js';
 import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from './training-intelligence.js';
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
@@ -137,7 +137,16 @@ app.put('/api/admin/students/:id/hmena-skills/:code',adminOnly,(req,res)=>{try{r
 app.post('/api/admin/sessions/:id/lessons',adminOnly,(req,res)=>{try{res.status(201).json(assignLessonToSession(db,{sessionId:req.params.id,lessonId:req.body?.lessonId,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/students/:id/portal-access',adminOnly,(req,res)=>{try{const student=db.prepare('SELECT display_name AS displayName FROM students WHERE id=?').get(req.params.id);if(!student)return res.status(404).json({error:'student not found'});const role=req.body?.role||'guardian';const displayName=req.body?.displayName||`${role==='guardian'?'Familia de ':''}${student.displayName}`;res.status(201).json(createPortalAccount(db,{studentIds:[req.params.id],role,displayName,loginName:req.body?.loginName||null,preferredLocale:req.body?.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/portal/accounts/:id/regenerate-code',adminOnly,(req,res)=>{try{res.json(regeneratePortalCode(db,req.params.id));}catch(error){res.status(400).json({error:error.message});}});
-app.post('/api/admin/students/:id/platform-accounts/verify',adminOnly,async(req,res,next)=>{try{const platform=cleanPlatform(req.body?.platform),username=String(req.body?.username||'').trim();if(!platform||!username)return res.status(400).json({error:'platform and username are required'});const verification=await verifyPlatformAccount(platform,username);const linked=linkStudentVerifiedAccount(db,req.params.id,verification);recordProfileVerification(db,linked.playerId,verification);res.status(201).json(linked);}catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
+app.post('/api/admin/students/:id/platform-accounts/verify',adminOnly,async(req,res,next)=>{try{
+  const platform=cleanPlatform(req.body?.platform),username=String(req.body?.username||'').trim();if(!platform||!username)return res.status(400).json({error:'platform and username are required'});
+  const verification=await verifyPlatformAccount(platform,username);const linked=linkStudentVerifiedAccount(db,req.params.id,verification);recordProfileVerification(db,linked.playerId,verification);
+  let initialRatingsCaptured=0;
+  try{
+    let lichessClient=null,chessComClient=null;if(platform==='lichess')lichessClient=new LichessClient();else chessComClient=new ChessComClient();
+    const snap=await captureVerifiedAccountRatings(db,{playerId:linked.playerId,platform,username:linked.username,lichessClient,chessComClient});initialRatingsCaptured=snap.saved;
+  }catch{}
+  res.status(201).json({...linked,initialRatingsCaptured});
+}catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
 app.get('/api/admin/students/:id/rating-progress',adminOnly,(req,res)=>{const data=studentRatingProgress(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students/:id/training-intelligence',adminOnly,(req,res)=>{const data=studentTrainingIntelligence(db,req.params.id,{locale:req.query?.locale||'en',includeTechnical:true});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
 app.get('/api/admin/students/:id/opening-trainer',adminOnly,(req,res)=>{const data=studentOpeningProfile(db,req.params.id,{locale:req.query?.locale||'en'});if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
