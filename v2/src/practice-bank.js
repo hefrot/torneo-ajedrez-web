@@ -53,7 +53,13 @@ export function studentPracticeBank(db,studentId,{limit=3}={}){
   const near=candidates.filter(row=>Math.abs(Number(row.rating||rating)-rating)<=300);const pool=near.length>=limit?near:candidates;
   pool.sort((a,b)=>hash(`${studentId}:${a.id}`).localeCompare(hash(`${studentId}:${b.id}`)));
   const attempts7d=db.prepare("SELECT COUNT(*) n,SUM(CASE WHEN correct=1 THEN 1 ELSE 0 END) c FROM practice_bank_attempts WHERE student_id=? AND attempted_at>=datetime('now','-7 day')").get(studentId);
-  return {targetThemes:themes,targetRating:rating,profile,summary:{attempts7d:Number(attempts7d?.n||0),correct7d:Number(attempts7d?.c||0)},puzzles:pool.slice(0,Math.max(1,Math.min(12,Number(limit)||3))).map(({themesJson,...row})=>row)};
+  const history=db.prepare(`SELECT a.puzzle_id AS puzzleId,a.correct,a.puzzle_rating AS puzzleRating,a.rating_before AS ratingBefore,a.rating_after AS ratingAfter,a.attempted_at AS attemptedAt,p.themes_json AS themesJson
+    FROM practice_bank_attempts a JOIN practice_bank_puzzles p ON p.id=a.puzzle_id
+    WHERE a.student_id=? AND a.rowid=(SELECT MIN(x.rowid) FROM practice_bank_attempts x WHERE x.student_id=a.student_id AND x.puzzle_id=a.puzzle_id)
+    ORDER BY a.attempted_at DESC LIMIT 30`).all(studentId).map(row=>({...row,themes:parse(row.themesJson)}));
+  const byTheme=new Map();for(const row of history){for(const theme of row.themes||[]){if(['short','long','veryLong','middlegame','endgame','advantage','crushing'].includes(theme))continue;const x=byTheme.get(theme)||{theme,attempts:0,correct:0};x.attempts++;x.correct+=row.correct?1:0;byTheme.set(theme,x);}}
+  const themeStats=[...byTheme.values()].map(x=>({...x,accuracy:Math.round(x.correct/x.attempts*100)})).sort((a,b)=>b.attempts-a.attempts||b.accuracy-a.accuracy).slice(0,8);
+  return {targetThemes:themes,targetRating:rating,profile,history:history.reverse().map(({themesJson,...row})=>row),themeStats,summary:{attempts7d:Number(attempts7d?.n||0),correct7d:Number(attempts7d?.c||0)},puzzles:pool.slice(0,Math.max(1,Math.min(12,Number(limit)||3))).map(({themesJson,...row})=>row)};
 }
 export function recordPracticeBankAttempt(db,{studentId,puzzleId,answerMove}={}){
   const puzzle=db.prepare("SELECT id,best_move AS bestMove,rating FROM practice_bank_puzzles WHERE id=? AND active=1").get(puzzleId);
