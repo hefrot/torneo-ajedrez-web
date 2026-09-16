@@ -99,7 +99,9 @@ function familyLeaks(training){
 function practiceMissionCards(s){
   const missions=s.practiceMissions||[];
   if(!missions.length)return `<div class="empty">${t('noTraining')}</div>`;
-  return missions.map(m=>{const done=m.status==='completed',submitted=m.status==='submitted';return `<article class="practice-mission ${done?'done':''} ${submitted?'submitted':''}"><div class="practice-source"><span>♞</span><small>${t('externalPractice')}</small></div><strong>${esc(m.title)}</strong><p>${esc(m.description)}</p><div class="practice-actions"><a class="btn btn-secondary practice-open" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t('openPractice')} ↗</a>${done?`<span class="mission-status status-ok">✓ ${t('coachConfirmed')}</span>`:submitted?`<span class="mission-status status-warn">✓ ${t('reportedDone')}</span>`:`<button class="btn btn-secondary submit-practice" data-student-id="${esc(s.id)}" data-assignment-id="${esc(m.id)}" type="button">${t('markDone')}</button>`}</div></article>`;}).join('');
+  const render=m=>{const done=m.status==='completed',submitted=m.status==='submitted';return `<article class="practice-mission ${done?'done':''} ${submitted?'submitted':''}"><div class="practice-source"><span>♞</span><small>${t('externalPractice')}</small></div><strong>${esc(m.title)}</strong><p>${esc(m.description)}</p><div class="practice-actions"><a class="btn btn-secondary practice-open" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t('openPractice')} ↗</a>${done?`<span class="mission-status status-ok">✓ ${t('coachConfirmed')}</span>`:submitted?`<span class="mission-status status-warn">✓ ${t('reportedDone')}</span>`:`<button class="btn btn-secondary submit-practice" data-student-id="${esc(s.id)}" data-assignment-id="${esc(m.id)}" type="button">${t('markDone')}</button>`}</div></article>`};
+  const primary=render(missions[0]),more=missions.slice(1);
+  return `${primary}${more.length?`<details class="compact-more"><summary>${locale==='es'?`${more.length} temas más de Lichess`:`${more.length} more Lichess themes`}</summary><div class="practice-grid compact-practice-grid">${more.map(render).join('')}</div></details>`:''}`;
 }
 function milestoneStrip(s){
   const j=s.journey;if(!j?.steps?.length)return '';
@@ -117,9 +119,12 @@ function assessmentCta(s){
 function botArenaBlock(arena,studentId,placement){
   if(!arena?.bots?.length)return '';
   const hasPlacement=Boolean(placement);
-  const cards=arena.bots.map(b=>{const state=b.passed?t('botPassed'):!b.unlocked?t('botLocked'):(hasPlacement&&b.recommended?t('botRecommended'):'');const score=b.lastChallenge?.summary?.points;return `<article class="bot-rung ${b.passed?'passed':''} ${!b.unlocked?'locked':''}"><div><strong>${esc(b.name)}</strong><small>${t('botLevel')} ${b.targetLevel}${state?` · ${state}`:''}</small>${score!=null?`<small>${t('botPoints')}: ${score}/3</small>`:''}</div>${b.unlocked&&!b.passed?`<button class="btn btn-secondary start-bot-challenge" data-student-id="${esc(studentId)}" data-bot-code="${esc(b.code)}" type="button">${hasPlacement?t('botStart'):t('botWarmup')}</button>`:''}</article>`;}).join('');
-  return `${!hasPlacement?`<div class="next-lesson-box"><small>${t('botArena')}</small><strong>${t('botAssessmentFirst')}</strong></div>`:''}<div class="bot-ladder">${cards}</div>`;
+  const render=b=>{const state=b.passed?t('botPassed'):!b.unlocked?t('botLocked'):(hasPlacement&&b.recommended?t('botRecommended'):'');const score=b.lastChallenge?.summary?.points;return `<article class="bot-rung ${b.passed?'passed':''} ${!b.unlocked?'locked':''}"><div><strong>${esc(b.name)}</strong><small>${t('botLevel')} ${b.targetLevel}${state?` · ${state}`:''}</small>${score!=null?`<small>${t('botPoints')}: ${score}/3</small>`:''}</div>${b.unlocked&&!b.passed?`<button class="btn btn-secondary start-bot-challenge" data-student-id="${esc(studentId)}" data-bot-code="${esc(b.code)}" type="button">${hasPlacement?t('botStart'):t('botWarmup')}</button>`:''}</article>`};
+  const current=arena.bots.find(b=>b.unlocked&&!b.passed)||arena.bots.find(b=>b.recommended)||arena.bots[0];
+  const rest=arena.bots.filter(b=>b.code!==current.code);
+  return `${!hasPlacement?`<div class="next-lesson-box"><small>${t('botArena')}</small><strong>${t('botAssessmentFirst')}</strong></div>`:''}<div class="bot-ladder bot-current">${render(current)}</div>${rest.length?`<details class="compact-more"><summary>${locale==='es'?'Ver escalera completa':'View full bot ladder'}</summary><div class="bot-ladder">${rest.map(render).join('')}</div></details>`:''}`;
 }
+
 function studentCard(s){
   const rating=primaryRating(s.ratings),reviews=s.training?.reviews||[],record=recentRecord(reviews),leaks=familyLeaks(s.training),reviewed=s.training?.summary?.reviewedGames||reviews.length,puzzleCount=s.training?.activePuzzles||0;
   const ratingLabel=rating?`${rating.latestRating}`:'—',ratingMeta=rating?`${rating.platform} ${rating.ratingType} · ${rating.points?.[rating.points.length-1]?.gamesCount??'—'} ${t('experience')}`:t('noRatings');
