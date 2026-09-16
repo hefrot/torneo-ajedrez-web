@@ -72,6 +72,14 @@ function leakSummary(db,studentId,locale='en'){
   }));
 }
 
+const familyGameModeFactor=value=>({rapid:1,classical:1,correspondence:1,daily:1,blitz:.25,bullet:0,ultrabullet:0}[String(value||'').toLowerCase()]??.75);
+function familyLeakSummary(db,studentId,locale='en'){
+  const rows=db.prepare(`SELECT f.skill_id AS skillId,cs.code AS skillCode,f.finding_type AS findingType,f.severity,COALESCE(g.time_class,'unknown') AS timeClass,COALESCE(g.played_at,f.created_at) AS evidenceAt FROM student_game_findings f LEFT JOIN curriculum_skills cs ON cs.id=f.skill_id LEFT JOIN academic_external_games g ON g.student_id=f.student_id AND g.external_game_id=f.source_game_id WHERE f.student_id=?`).all(studentId);
+  const grouped=new Map();
+  for(const row of rows){const factor=familyGameModeFactor(row.timeClass);if(factor<=0)continue;const key=`${row.skillId||'none'}:${row.findingType}`;if(!grouped.has(key))grouped.set(key,{skillId:row.skillId,skillCode:row.skillCode,findingType:row.findingType,occurrences:0,effectiveOccurrences:0,severitySum:0,lastSeen:null});const g=grouped.get(key);g.occurrences++;g.effectiveOccurrences+=factor;g.severitySum+=Number(row.severity||1)*factor;g.lastSeen=!g.lastSeen||String(row.evidenceAt)>g.lastSeen?row.evidenceAt:g.lastSeen;}
+  return [...grouped.values()].map(row=>{const avgSeverity=row.effectiveOccurrences?row.severitySum/row.effectiveOccurrences:0;return {...row,avgSeverity:Number(avgSeverity.toFixed(2)),effectiveOccurrences:Number(row.effectiveOccurrences.toFixed(2)),skillTitle:skillTitle(db,row.skillId,locale),score:Number((row.effectiveOccurrences*avgSeverity).toFixed(2)),recommendedLesson:recommendedLesson(db,row.skillId,locale)};}).sort((a,b)=>b.score-a.score||String(b.lastSeen||'').localeCompare(String(a.lastSeen||'')));
+}
+
 function openingSummary(db,studentId){
   const rows=db.prepare(`SELECT COALESCE(opening_name,'Unknown') AS openingName,opening_eco AS openingEco,COUNT(*) AS games,
     SUM(CASE WHEN result IN ('win','1-0','0-1') THEN 1 ELSE 0 END) AS decisiveResults,
@@ -88,6 +96,7 @@ export function studentTrainingIntelligence(db,studentId,{locale='en',includeTec
   if(!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId))return null;
   createPuzzlesFromFindings(db,studentId);
   const leaks=leakSummary(db,studentId,lang);
+  const familyLeaks=familyLeakSummary(db,studentId,lang);
   const puzzles=db.prepare(`SELECT p.id,p.fen,p.move_played AS movePlayed,p.best_move AS bestMove,p.status,p.skill_id AS skillId,COUNT(a.id) AS attempts,SUM(CASE WHEN a.correct=1 THEN 1 ELSE 0 END) AS correctAttempts
     FROM training_puzzles p LEFT JOIN training_puzzle_attempts a ON a.puzzle_id=p.id WHERE p.student_id=? GROUP BY p.id ORDER BY CASE p.status WHEN 'active' THEN 0 ELSE 1 END,p.created_at DESC LIMIT 30`).all(studentId).map(p=>({...p,skillTitle:skillTitle(db,p.skillId,lang)}));
   const reviews=db.prepare(`SELECT id,source_type AS sourceType,source_game_id AS sourceGameId,platform,played_at AS playedAt,result,opening_name AS openingName,opening_eco AS openingEco,status,summary_json AS summaryJson FROM student_game_reviews WHERE student_id=? ORDER BY COALESCE(played_at,created_at) DESC LIMIT 20`).all(studentId).map(r=>({...r,summary:JSON.parse(r.summaryJson||'{}')}));
@@ -96,5 +105,5 @@ export function studentTrainingIntelligence(db,studentId,{locale='en',includeTec
   const top=leaks[0]||null;
   const coachInsight=top?`${copy[lang].focus} ${top.skillTitle||top.findingType}. ${top.occurrences}× · severity ${top.avgSeverity}/5.`:copy[lang].noData;
   const recentFindings=includeTechnical?db.prepare(`SELECT f.id,f.source_game_id AS sourceGameId,f.finding_type AS findingType,f.severity,f.engine_cp_loss AS cpLoss,f.classifier_confidence AS classifierConfidence,f.classifier_source AS classifierSource,f.ply,f.move_number AS moveNumber,f.move_played AS movePlayed,f.best_move AS bestMove,f.created_at AS createdAt,f.skill_id AS skillId FROM student_game_findings f WHERE f.student_id=? ORDER BY f.created_at DESC LIMIT 30`).all(studentId).map(f=>({...f,skillTitle:skillTitle(db,f.skillId,lang)})):undefined;
-  return {studentId,locale:lang,coachInsight,topLeaks:leaks.slice(0,8),puzzles:safePuzzles,activePuzzles,reviews,openings:openingSummary(db,studentId),ratings:studentRatingProgress(db,studentId),summary:{findings:leaks.reduce((n,x)=>n+Number(x.occurrences),0),activePuzzles,reviewedGames:reviews.length},...(includeTechnical?{recentFindings}:{})};
+  return {studentId,locale:lang,coachInsight,topLeaks:leaks.slice(0,8),familyTopLeaks:familyLeaks.slice(0,8),puzzles:safePuzzles,activePuzzles,reviews,openings:openingSummary(db,studentId),ratings:studentRatingProgress(db,studentId),summary:{findings:leaks.reduce((n,x)=>n+Number(x.occurrences),0),activePuzzles,reviewedGames:reviews.length},...(includeTechnical?{recentFindings}:{})};
 }

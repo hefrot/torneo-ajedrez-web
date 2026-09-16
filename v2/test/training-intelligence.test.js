@@ -6,6 +6,7 @@ import {seedHmenaFramework} from '../src/hmena-curriculum.js';
 import {seedCurriculumLocalizations} from '../src/curriculum-localization.js';
 import {seedHmenaCourse0800} from '../src/hmena-course.js';
 import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview} from '../src/training-intelligence.js';
+import {linkStudentVerifiedAccount} from '../src/student-platform-link.js';
 
 const finding=(db,id,studentId,skillCode,severity=4)=>{
   const skill=db.prepare('SELECT id FROM curriculum_skills WHERE code=?').get(skillCode);
@@ -51,4 +52,19 @@ test('repeating the same puzzle immediately does not create mastery',()=>{
   const puzzle=studentTrainingIntelligence(db,student.id,{locale:'en'}).puzzles[0];
   for(let i=0;i<3;i++)recordPuzzleAttempt(db,{studentId:student.id,puzzleId:puzzle.id,answerMove:'a1b1',now:new Date(`2026-09-10T10:0${i}:00Z`)});
   assert.equal(db.prepare('SELECT status FROM training_puzzles WHERE id=?').get(puzzle.id).status,'active');db.close();
+});
+
+test('family priorities ignore Bullet while technical leaks retain it',()=>{
+  const db=openDatabase(':memory:');seedHmenaFramework(db);seedCurriculumLocalizations(db);seedHmenaCourse0800(db);
+  const student=createStudent(db,{displayName:'Bullet Student'});
+  const linked=linkStudentVerifiedAccount(db,student.id,{verified:true,platform:'chesscom',username:'bulletkid',usernameNormalized:'bulletkid',verificationSource:'test',verifiedAt:'2026-09-16T10:00:00Z'});
+  const account=db.prepare("SELECT id FROM player_accounts WHERE player_id=? AND platform='chesscom'").get(linked.playerId);
+  const addGame=(id,timeClass)=>db.prepare("INSERT INTO academic_external_games(id,student_id,account_id,platform,external_game_id,time_class,analysis_status) VALUES (?,?,?,?,?,?,'analyzed')").run('G-'+id,student.id,account.id,'chesscom','game-'+id,timeClass);
+  for(let i=1;i<=5;i++){addGame('B'+i,'bullet');finding(db,'B'+i,student.id,'DEV-PIN',5);}
+  addGame('R1','rapid');finding(db,'R1',student.id,'DEV-FORK',2);
+  const intel=studentTrainingIntelligence(db,student.id,{locale:'en'});
+  assert.equal(intel.topLeaks[0].skillTitle,'Pins');
+  assert.equal(intel.familyTopLeaks[0].skillTitle,'Forks & Double Attacks');
+  assert.ok(!intel.familyTopLeaks.some(x=>x.skillTitle==='Pins'));
+  db.close();
 });
