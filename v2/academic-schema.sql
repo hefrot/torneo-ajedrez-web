@@ -302,3 +302,60 @@ CREATE TABLE IF NOT EXISTS external_rating_snapshots (
 CREATE INDEX IF NOT EXISTS idx_portal_students_student ON portal_account_students(student_id);
 CREATE INDEX IF NOT EXISTS idx_portal_sessions_account ON portal_sessions(account_id,revoked_at,expires_at);
 CREATE INDEX IF NOT EXISTS idx_external_ratings_player_time ON external_rating_snapshots(player_id,rating_type,captured_at);
+
+CREATE TABLE IF NOT EXISTS diagnostic_blueprints (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  min_rating INTEGER,
+  max_rating INTEGER,
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1))
+);
+CREATE TABLE IF NOT EXISTS diagnostic_items (
+  id TEXT PRIMARY KEY,
+  blueprint_id TEXT NOT NULL REFERENCES diagnostic_blueprints(id) ON DELETE CASCADE,
+  skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+  stage TEXT NOT NULL CHECK(stage IN ('foundations','development')),
+  sequence_no INTEGER NOT NULL,
+  correct_answer TEXT NOT NULL CHECK(correct_answer IN ('A','B','C','D')),
+  active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+  UNIQUE(blueprint_id,sequence_no)
+);
+CREATE TABLE IF NOT EXISTS diagnostic_item_localizations (
+  item_id TEXT NOT NULL REFERENCES diagnostic_items(id) ON DELETE CASCADE,
+  locale TEXT NOT NULL CHECK(locale IN ('en','es')),
+  prompt TEXT NOT NULL,
+  options_json TEXT NOT NULL,
+  PRIMARY KEY(item_id,locale)
+);CREATE TABLE IF NOT EXISTS diagnostic_attempts (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  blueprint_id TEXT NOT NULL REFERENCES diagnostic_blueprints(id) ON DELETE CASCADE,
+  locale TEXT NOT NULL CHECK(locale IN ('en','es')),
+  status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','completed','abandoned')),
+  stage TEXT NOT NULL DEFAULT 'foundations' CHECK(stage IN ('foundations','development','completed')),
+  started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at TEXT,
+  foundations_score INTEGER,
+  development_score INTEGER,
+  placement_band_code TEXT,
+  summary_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS diagnostic_responses (
+  attempt_id TEXT NOT NULL REFERENCES diagnostic_attempts(id) ON DELETE CASCADE,
+  item_id TEXT NOT NULL REFERENCES diagnostic_items(id) ON DELETE CASCADE,
+  answer_key TEXT NOT NULL CHECK(answer_key IN ('A','B','C','D')),
+  correct INTEGER NOT NULL CHECK(correct IN (0,1)),
+  answered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(attempt_id,item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_attempts_student ON diagnostic_attempts(student_id,status,started_at);
+CREATE INDEX IF NOT EXISTS idx_diagnostic_items_stage ON diagnostic_items(blueprint_id,stage,sequence_no);
+CREATE TABLE IF NOT EXISTS lesson_skills (
+  lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+  skill_id TEXT NOT NULL REFERENCES curriculum_skills(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'primary' CHECK(role IN ('primary','supporting','review')),
+  sequence_no INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY(lesson_id,skill_id)
+);
+CREATE INDEX IF NOT EXISTS idx_lesson_skills_skill ON lesson_skills(skill_id,lesson_id);
