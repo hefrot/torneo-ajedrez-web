@@ -247,6 +247,18 @@ CREATE TABLE IF NOT EXISTS student_game_findings (
   UNIQUE(student_id,source_type,source_game_id,skill_id,finding_type)
 );
 
+CREATE TABLE IF NOT EXISTS progress_reports (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','archived')),
+  snapshot_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  published_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_progress_reports_student_time ON progress_reports(student_id,status,period_end);
+
 CREATE INDEX IF NOT EXISTS idx_students_player ON students(player_id);
 CREATE INDEX IF NOT EXISTS idx_programs_school_status ON programs(school_id,status);
 CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id,status);

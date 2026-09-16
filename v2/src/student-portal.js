@@ -1,4 +1,5 @@
 import {getHmenaPlacement} from './hmena-curriculum.js';
+import {listProgressReports} from './progress-reports.js';
 import {normalizeLocale,localizedLearningPriorities,localizeSkillRows} from './curriculum-localization.js';
 import {studentRatingProgress} from './rating-tracking.js';
 import {studentTrainingIntelligence} from './training-intelligence.js';
@@ -27,6 +28,7 @@ export function studentPortalDashboard(db,accountId,{now=new Date()}={}){
     assignments:assignmentStmt.all(student.id),
     attendance:attendanceStmt.get(student.id),
     skills,
-    sharedCoachNotes:account.role==='guardian'?noteStmt.all(student.id):[]
+    sharedCoachNotes:account.role==='guardian'?noteStmt.all(student.id):[],
+    progressReports:listProgressReports(db,student.id,{locale,publishedOnly:true,limit:6})
   })})};
 }

@@ -226,6 +226,19 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'academic-progress-reports-v14',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS progress_reports (
+        id TEXT PRIMARY KEY,student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        period_start TEXT NOT NULL,period_end TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published','archived')),
+        snapshot_json TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,published_at TEXT);
+      CREATE INDEX IF NOT EXISTS idx_progress_reports_student_time ON progress_reports(student_id,status,period_end);`);
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
