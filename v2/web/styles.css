@@ -97,3 +97,4 @@
 .continue-training{width:100%;margin:14px 0 12px}.training-more{margin-top:14px}.training-more>summary{padding:12px 2px;font-size:14px}.training-more[open]>summary{margin-bottom:10px}
 @media(max-width:640px){body{padding-bottom:82px}.portal-bottom-nav{position:fixed;left:12px;right:12px;bottom:max(8px,env(safe-area-inset-bottom));margin:0;max-width:none}.family-dashboard{padding-bottom:18px}}
 .portal-login-form .field{background:#0f1620!important;border:1px solid #334155!important;color:#f8fafc!important}.portal-login-form .field::placeholder{color:#7f8a9a;opacity:1}
+.training-disclaimer{display:block;color:var(--muted);margin:0 0 10px}.practice-lab{scroll-margin-bottom:90px}
