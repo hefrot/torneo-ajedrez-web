@@ -9,7 +9,7 @@ const copy={
     skewer:['Skewers','Solve 10 Lichess skewer puzzles.'],
     discovered:['Discovered Attacks','Solve 10 Lichess discovered-attack puzzles.'],
     opening:['Opening Tactics','Practice tactics that happen in the opening.'],
-    themes:['Tactical Themes','Choose a tactical theme and solve at least 10 puzzles.'],
+    themes:['Checks, Captures & Threats','Use Lichess Puzzle Themes and solve at least 10 forcing-move positions.'],
     practice:['Structured Practice','Use Lichess Practice for guided tactical and endgame modules.']
   },
   es:{
@@ -19,7 +19,7 @@ const copy={
     skewer:['Enfiladas','Resuelve 10 ejercicios de enfiladas en Lichess.'],
     discovered:['Ataques descubiertos','Resuelve 10 ejercicios de ataques descubiertos en Lichess.'],
     opening:['Táctica de apertura','Practica tácticas que aparecen en la apertura.'],
-    themes:['Temas tácticos','Elige un tema táctico y resuelve al menos 10 ejercicios.'],
+    themes:['Jaques, Capturas y Amenazas','Usa los temas de Lichess y resuelve al menos 10 posiciones de jugadas forzantes.'],
     practice:['Práctica guiada','Usa Lichess Practice para módulos guiados de táctica y finales.']
   }
 };
@@ -44,14 +44,17 @@ export function syncPracticeMissions(db,studentId,{locale='en',training}={}){
   for(const leak of leaks){const hit=findResource(leak);if(!hit)continue;const [key,resource]=hit;if(used.has(key))continue;used.add(key);selected.push({key,resource,leak});if(selected.length>=3)break;}
   if(!selected.length)selected.push({key:'practice',resource:resources.practice,leak:null});
   const insert=db.prepare(`INSERT OR IGNORE INTO assignments(id,student_id,skill_id,title,details,status) VALUES (?,?,?,?,?,'assigned')`);
-  for(const item of selected){const id=`PRACTICE-${sha(`${studentId}:${item.key}`)}`,text=copy[lang][item.key];insert.run(id,studentId,item.leak?.skillId||null,text[0],details(item.key,item.resource,item.leak,lang));}
+  const selectedIds=new Set();
+  for(const item of selected){const id=`PRACTICE-${sha(`${studentId}:${item.key}`)}`,text=copy[lang][item.key];selectedIds.add(id);insert.run(id,studentId,item.leak?.skillId||null,text[0],details(item.key,item.resource,item.leak,lang));}
+  const stale=db.prepare("SELECT id,details FROM assignments WHERE student_id=? AND status='assigned'").all(studentId).filter(row=>parseDetails(row.details).kind==='external_practice'&&!selectedIds.has(row.id));
+  const waive=db.prepare("UPDATE assignments SET status='waived' WHERE id=? AND status='assigned'");for(const row of stale)waive.run(row.id);
   return listPracticeMissions(db,studentId,{locale:lang});
 }
 export function listPracticeMissions(db,studentId,{locale='en'}={}){
   const lang=locale==='es'?'es':'en';
   return db.prepare(`SELECT id,title,details,due_at AS dueAt,status,created_at AS createdAt FROM assignments WHERE student_id=? ORDER BY created_at DESC`).all(studentId)
     .map(row=>({...row,meta:parseDetails(row.details)}))
-    .filter(row=>row.meta.kind==='external_practice')
+    .filter(row=>row.meta.kind==='external_practice'&&row.status!=='waived')
     .map(row=>{const key=row.meta.resourceKey||'practice',text=copy[lang][key]||copy[lang].practice;return {...row,title:text[0],description:text[1],provider:'Lichess',url:row.meta.url||resources[key]?.url||resources.practice.url,target:Number(row.meta.target||10),tracking:row.meta.tracking||'student_reported'};});
 }
 
