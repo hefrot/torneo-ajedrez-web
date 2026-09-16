@@ -9,7 +9,8 @@ import chess.engine
 import chess.pgn
 
 ENGINE_PATH = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
-ANALYSIS_VERSION = "academic-stockfish-v2"
+ANALYSIS_VERSION = "academic-stockfish-v3"
+PEDAGOGICAL_CP_CAP = 1500
 PIECE_VALUE = {chess.PAWN:1, chess.KNIGHT:3, chess.BISHOP:3, chess.ROOK:5, chess.QUEEN:9, chess.KING:100}
 
 def cp(score, color):
@@ -103,12 +104,12 @@ def analyze(payload):
                 best_san = board.san(best_move)
                 best_cp = cp(info["score"], mover)
                 second_cp = cp(lines[1]["score"], mover) if len(lines) > 1 else best_cp - 100000
-                solution_margin_cp = max(0, best_cp - second_cp)
+                solution_margin_cp = min(PEDAGOGICAL_CP_CAP, max(0, best_cp - second_cp))
                 board_after = board.copy(stack=False)
                 board_after.push(move)
                 after_info = engine.analyse(board_after, chess.engine.Limit(time=think))
                 played_cp = cp(after_info["score"], mover)
-                loss = max(0, best_cp - played_cp)
+                loss = min(PEDAGOGICAL_CP_CAP, max(0, best_cp - played_cp))
                 losses.append(loss); student_moves += 1
                 if ply < 20: opening_losses.append(loss)
                 if loss >= 100:

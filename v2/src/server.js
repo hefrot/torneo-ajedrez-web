@@ -172,6 +172,7 @@ app.post('/api/admin/students/:id/platform-accounts/verify',staffOnly,async(req,
 }catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
 app.post('/api/admin/students/:id/sync-games',staffOnly,async(req,res,next)=>{try{
   const student=db.prepare('SELECT id FROM students WHERE id=? AND status!=\'archived\'').get(req.params.id);if(!student)return res.status(404).json({error:'student not found'});
+  if(req.body?.reanalyze===true)db.prepare("UPDATE academic_external_games SET analysis_status='pending',analysis_error=NULL WHERE student_id=? AND analysis_status='analyzed'").run(req.params.id);
   let chessComClient=null;try{chessComClient=new ChessComClient();}catch{}
   const result=await syncAndAnalyzeAcademicGames(db,{studentId:req.params.id,lichessClient:new LichessClient(),chessComClient,analyzeGame:analyzeAcademicGame,maxPerAccount:Math.max(1,Math.min(50,Number(req.body?.maxPerAccount)||30)),analysisLimit:Math.max(1,Math.min(30,Number(req.body?.analysisLimit)||12)),months:Math.max(1,Math.min(12,Number(req.body?.months)||2))});
   res.json(result);
