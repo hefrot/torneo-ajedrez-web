@@ -301,6 +301,23 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'practice-puzzle-rating-v19',
+    run(db){
+      db.exec(`CREATE TABLE IF NOT EXISTS student_practice_profiles (
+        student_id TEXT PRIMARY KEY REFERENCES students(id) ON DELETE CASCADE,
+        rating INTEGER NOT NULL DEFAULT 900,attempts INTEGER NOT NULL DEFAULT 0,correct INTEGER NOT NULL DEFAULT 0,
+        streak INTEGER NOT NULL DEFAULT 0,best_streak INTEGER NOT NULL DEFAULT 0,seed_source TEXT NOT NULL DEFAULT 'default',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE INDEX IF NOT EXISTS idx_student_practice_rating ON student_practice_profiles(rating);`);
+      if(!hasColumn(db,'practice_bank_attempts','puzzle_rating')) db.exec('ALTER TABLE practice_bank_attempts ADD COLUMN puzzle_rating INTEGER');
+      if(!hasColumn(db,'practice_bank_attempts','rating_before')) db.exec('ALTER TABLE practice_bank_attempts ADD COLUMN rating_before INTEGER');
+      if(!hasColumn(db,'practice_bank_attempts','rating_after')) db.exec('ALTER TABLE practice_bank_attempts ADD COLUMN rating_after INTEGER');
+      if(!hasColumn(db,'practice_bank_attempts','streak_after')) db.exec('ALTER TABLE practice_bank_attempts ADD COLUMN streak_after INTEGER');
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

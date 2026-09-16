@@ -553,6 +553,20 @@ CREATE TABLE IF NOT EXISTS practice_bank_attempts (
 CREATE INDEX IF NOT EXISTS idx_practice_bank_active_rating ON practice_bank_puzzles(active,rating);
 CREATE INDEX IF NOT EXISTS idx_practice_bank_attempts_student ON practice_bank_attempts(student_id,attempted_at);
 
+CREATE TABLE IF NOT EXISTS student_practice_profiles (
+  student_id TEXT PRIMARY KEY REFERENCES students(id) ON DELETE CASCADE,
+  rating INTEGER NOT NULL DEFAULT 900,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  correct INTEGER NOT NULL DEFAULT 0,
+  streak INTEGER NOT NULL DEFAULT 0,
+  best_streak INTEGER NOT NULL DEFAULT 0,
+  seed_source TEXT NOT NULL DEFAULT 'default',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_student_practice_rating ON student_practice_profiles(rating);
+
+
 CREATE VIEW IF NOT EXISTS v_public_league_accounts AS
 SELECT p.id,p.name,p.registration_status,p.availability,p.last_activity_at,a.platform,a.username,a.verified_at,a.verification_source
 FROM players p JOIN player_accounts a ON a.player_id=p.id

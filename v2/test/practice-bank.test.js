@@ -20,3 +20,21 @@ test('practice bank records deterministic first-move answers and rotates solved 
   const right=recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:first.id,answerMove:solution});assert.equal(right.correct,true);
   const next=studentPracticeBank(db,student.id,{limit:3});assert.ok(!next.puzzles.some(p=>p.id===first.id));db.close();
 });
+
+test('CIS puzzle rating is separate, adaptive, and tracks streak/accuracy',()=>{
+  const db=openDatabase(':memory:');seedPracticeBank(db);const student=createStudent(db,{displayName:'Rating Kid'});
+  db.prepare("INSERT INTO assignments(id,student_id,title,details,status) VALUES ('A1',?,'CIS Practice · Forks',?,'assigned')").run(student.id,JSON.stringify({kind:'external_practice',resourceKey:'fork'}));
+  const first=studentPracticeBank(db,student.id,{limit:1}).puzzles[0],solution=db.prepare('SELECT best_move AS bestMove FROM practice_bank_puzzles WHERE id=?').get(first.id).bestMove;
+  const start=studentPracticeBank(db,student.id,{limit:1}).profile;assert.equal(start.attempts,0);assert.equal(start.seedSource,'default');
+  const good=recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:first.id,answerMove:solution});assert.equal(good.correct,true);assert.ok(good.ratingAfter>good.ratingBefore);assert.equal(good.streak,1);
+  const second=studentPracticeBank(db,student.id,{limit:1}).puzzles[0];const bad=recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:second.id,answerMove:'a1a1'});assert.equal(bad.correct,false);assert.ok(bad.ratingAfter<bad.ratingBefore);assert.equal(bad.streak,0);
+  const profile=studentPracticeBank(db,student.id,{limit:1}).profile;assert.equal(profile.attempts,2);assert.equal(profile.correct,1);assert.equal(profile.accuracy,50);assert.equal(profile.bestStreak,1);db.close();
+});
+
+test('retrying the same puzzle does not change CIS puzzle rating twice',()=>{
+  const db=openDatabase(':memory:');seedPracticeBank(db);const student=createStudent(db,{displayName:'Retry Kid'});
+  const first=studentPracticeBank(db,student.id,{limit:1}).puzzles[0],solution=db.prepare('SELECT best_move AS bestMove FROM practice_bank_puzzles WHERE id=?').get(first.id).bestMove;
+  const miss=recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:first.id,answerMove:'a1a1'});assert.equal(miss.rated,true);
+  const retry=recordPracticeBankAttempt(db,{studentId:student.id,puzzleId:first.id,answerMove:solution});assert.equal(retry.correct,true);assert.equal(retry.rated,false);assert.equal(retry.ratingDelta,0);
+  const profile=studentPracticeBank(db,student.id,{limit:1}).profile;assert.equal(profile.attempts,1);assert.equal(profile.correct,0);db.close();
+});
