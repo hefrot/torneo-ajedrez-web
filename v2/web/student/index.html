@@ -4,17 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive">
-  <title>My Progress · HMENA Chess</title>
+  <title>HMENA Chess</title>
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
   <div class="preview-ribbon">STUDENT PORTAL · STAGING</div>
   <div class="shell student-shell">
     <nav class="topbar">
-      <a class="brand" href="../"><span class="brand-mark">♞</span><span>HMENA Chess<small id="brand-sub">MY PROGRESS</small></span></a>
-      <div class="inline-editor"><select id="locale-select" class="field"><option value="en">English</option><option value="es">Español</option></select><button id="logout" class="btn btn-secondary" hidden>Log out</button></div>
+      <a class="brand" href="../"><span class="brand-mark">♞</span><span>HMENA Chess<small id="brand-sub">STUDENT PORTAL</small></span></a>
+      <div id="language-tools" class="inline-editor" hidden><select id="locale-select" class="field"><option value="en">English</option><option value="es">Español</option></select><button id="logout" class="btn btn-secondary" hidden>Log out</button></div>
     </nav>
-    <section id="login-panel" class="portal-login panel">
+    <section id="language-panel" class="language-gate panel">
+      <span class="eyebrow">HMENA Chess</span>
+      <h1>Choose your language<br><span>Elige tu idioma</span></h1>
+      <p>Select the language you want to use in the portal.<br>Selecciona el idioma que quieres usar en el portal.</p>
+      <div class="language-choice-grid">
+        <button class="language-choice" data-locale="en" type="button"><strong>English</strong><small>Continue in English</small></button>
+        <button class="language-choice" data-locale="es" type="button"><strong>Español</strong><small>Continuar en español</small></button>
+      </div>
+    </section>
+    <section id="login-panel" class="portal-login panel" hidden>
       <span class="eyebrow" id="login-eyebrow">Private access</span><h1 id="login-title">My Progress</h1><p id="login-help">Enter the username and code your coach gave you.</p>
       <form id="login-form" class="portal-login-form">
         <label><span id="username-label">Username</span><input class="field" name="loginName" autocomplete="username" required></label>
