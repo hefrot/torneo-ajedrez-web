@@ -189,6 +189,15 @@ const migrations=[
     }
   }
 
+,
+  {
+    id:'academic-session-lesson-tier-v11',
+    run(db){
+      if(!hasColumn(db,'session_lessons','cohort_tier')) db.exec('ALTER TABLE session_lessons ADD COLUMN cohort_tier TEXT');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_session_lessons_tier ON session_lessons(session_id,cohort_tier,sequence_no)');
+    }
+  }
+
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

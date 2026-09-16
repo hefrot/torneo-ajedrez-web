@@ -32,6 +32,7 @@ import {studentTrainingIntelligence,recordPuzzleAttempt,recordStudentGameReview}
 import {seedDiagnostic0800,startDiagnostic0800,diagnosticState,submitDiagnosticAnswer} from './diagnostic.js';
 import {course0800Overview} from './hmena-course.js';
 import {nextLessonRecommendation,recordCoachLessonDecision,latestApprovedPlan} from './next-lesson-engine.js';
+import {programLessonRecommendation,assignProgramLesson} from './group-lesson-engine.js';
 import {studentOpeningProfile} from './opening-trainer.js';
 
 const app=express();
@@ -148,6 +149,8 @@ app.post('/api/admin/schools',adminOnly,(req,res)=>{try{res.status(201).json(cre
 app.get('/api/admin/programs',adminOnly,(_q,res)=>res.json(listPrograms(db)));
 app.post('/api/admin/programs',adminOnly,(req,res)=>{try{res.status(201).json(createProgram(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/programs/:id/language',adminOnly,(req,res)=>{try{res.json(setProgramInstructionLocale(db,req.params.id,req.body?.instructionLocale));}catch(error){res.status(400).json({error:error.message});}});
+app.get('/api/admin/programs/:id/next-lesson-engine',adminOnly,(req,res)=>{const data=programLessonRecommendation(db,req.params.id,{locale:req.query?.locale||'es'});if(!data)return res.status(404).json({error:'program not found'});res.json(data);});
+app.post('/api/admin/programs/:id/lesson-plan',adminOnly,(req,res)=>{try{res.status(201).json(assignProgramLesson(db,{programId:req.params.id,lessonId:req.body?.lessonId,sessionId:req.body?.sessionId||null,cohortTier:req.body?.cohortTier||null,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/programs/:id/enrollments',adminOnly,(req,res)=>{try{res.status(201).json(enrollStudent(db,{programId:req.params.id,studentId:req.body?.studentId,initialLevel:req.body?.initialLevel??null}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/sessions/:id/attendance',adminOnly,(req,res)=>{try{res.json(saveSessionAttendance(db,req.params.id,req.body?.records));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/students/:id/profile',adminOnly,(req,res)=>{const profile=studentProfile(db,req.params.id);if(!profile)return res.status(404).json({error:'student not found'});res.json(profile);});

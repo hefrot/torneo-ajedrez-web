@@ -187,6 +187,7 @@ CREATE TABLE IF NOT EXISTS session_lessons (
   lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
   sequence_no INTEGER NOT NULL DEFAULT 1,
   delivery_stage TEXT NOT NULL DEFAULT 'theory_only' CHECK(delivery_stage IN ('theory_only','solved_exercises','practice_games','assessment_applied')),
+  cohort_tier TEXT,
   PRIMARY KEY(session_id,lesson_id)
 );
 

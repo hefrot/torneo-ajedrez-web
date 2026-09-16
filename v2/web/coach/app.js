@@ -3,6 +3,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let key=sessionStorage.getItem('hmena_chess_admin_key')||'';
 let dashboardData=null;
 let activeStudentId=null;
+let activeProgramId=null;
 $('#admin-key').value=key;
 
 async function api(path,options={}){
@@ -87,7 +88,28 @@ async function load(){
   d.todaySessions.forEach(s=>{const card=document.querySelector(`[data-session-id="${CSS.escape(s.id)}"]`);if(card)hydrateAttendance(card,s);});
   $('#upcoming').innerHTML=d.upcomingSessions.length?d.upcomingSessions.map(s=>`<article class="panel coach-card"><div><strong>${esc(s.school_name||s.program_name)}</strong><div class="row-meta">${esc(s.starts_at)} · ${esc(s.program_name)} · ${s.roster_count} alumno${s.roster_count===1?'':'s'} · ${esc(({en:'Inglés',es:'Español',bilingual:'Bilingüe'}[s.instruction_locale||'en']))}</div></div><span class="status-badge">${esc(s.program_type)}</span></article>`).join(''):'<div class="empty">Sin clases en los próximos 7 días.</div>';
   $('#alerts').innerHTML=d.alerts.length?d.alerts.map(a=>`<article class="panel coach-card"><strong>${a.priority==='high'?'⚠️':'ℹ️'} ${esc(a.message)}</strong>${a.studentId?`<button class="student-link" data-open-student="${esc(a.studentId)}" type="button">Abrir alumno</button>`:''}</article>`).join(''):'<div class="empty">Sin alertas pedagógicas.</div>';
-  $('#programs').innerHTML=d.programs.length?d.programs.map(p=>`<article class="panel coach-card program-card" data-program-id="${esc(p.id)}"><div><strong>${esc(p.school_name||p.name)}</strong><div class="row-meta">${esc(p.name)} · ${p.active_students} alumnos · Semana ${p.completed_week||0}/${p.planned_weeks||'-'}</div></div><div class="inline-editor"><select class="field program-language"><option value="en"${p.instruction_locale==='en'?' selected':''}>Inglés</option><option value="es"${p.instruction_locale==='es'?' selected':''}>Español</option><option value="bilingual"${p.instruction_locale==='bilingual'?' selected':''}>Bilingüe</option></select><button class="btn btn-secondary save-program-language" type="button">Guardar idioma</button></div></article>`).join(''):'<div class="empty">Sin programas activos.</div>';
+  $('#programs').innerHTML=d.programs.length?d.programs.map(p=>`<article class="panel coach-card program-card" data-program-id="${esc(p.id)}"><div><strong>${esc(p.school_name||p.name)}</strong><div class="row-meta">${esc(p.name)} · ${p.active_students} alumnos · Semana ${p.completed_week||0}/${p.planned_weeks||'-'}</div></div><div class="inline-editor"><select class="field program-language"><option value="en"${p.instruction_locale==='en'?' selected':''}>Inglés</option><option value="es"${p.instruction_locale==='es'?' selected':''}>Español</option><option value="bilingual"${p.instruction_locale==='bilingual'?' selected':''}>Bilingüe</option></select><button class="btn btn-secondary save-program-language" type="button">Guardar idioma</button>${['school','group','camp','club'].includes(p.program_type)?'<button class="btn btn-primary open-group-plan" type="button">Plan grupal</button>':''}</div></article>`).join(''):'<div class="empty">Sin programas activos.</div>';
+}
+
+function groupSuggestionCard(suggestion,{tier=null,nextSession=null}={}){
+  if(!suggestion)return '<div class="empty">Sin recomendación suficiente todavía.</div>';
+  const students=suggestion.students?.map(x=>esc(x.displayName)).join(', ')||'—';
+  const content=suggestion.lesson?.content||{};
+  return `<div class="next-lesson-box group-plan-card"><small>${tier?`Track ${esc(tier)}`:'Propuesta general'} · cobertura ${Math.round((suggestion.coverage||0)*100)}%</small><strong>${esc(suggestion.lesson?.title||suggestion.skill?.title||'Lección')}</strong><p>${esc(suggestion.skill?.title||'')} · ${suggestion.studentCount||0} alumno${suggestion.studentCount===1?'':'s'} · score prom. ${suggestion.avgScore??'—'}</p><p><small>${students}</small></p>${content.activity?`<p><strong>Actividad:</strong> ${esc(content.activity)}</p>`:''}<button class="btn btn-primary assign-group-plan" type="button" data-lesson-id="${esc(suggestion.lesson?.id||'')}" data-tier="${esc(tier||'')}">${nextSession?`Asignar a ${esc(nextSession.startsAt)}`:'Asignar a próxima sesión'}</button></div>`;
+}
+async function openProgramPlan(programId){
+  activeProgramId=programId;const data=await api(`../api/admin/programs/${encodeURIComponent(programId)}/next-lesson-engine?locale=es`);
+  $('#program-title').textContent=`Plan grupal · ${data.program?.schoolName||data.program?.name||''}`;
+  const general=groupSuggestionCard(data.suggestion,{nextSession:data.nextSession});
+  const tiers=data.byTier?.length?data.byTier.map(t=>`<section class="group-tier"><h3>${esc(t.cohortTier)} · ${t.rosterCount} alumno${t.rosterCount===1?'':'s'}</h3>${groupSuggestionCard(t.suggestion,{tier:t.cohortTier,nextSession:data.nextSession})}${t.diagnosticsNeeded?`<p class="row-meta">${t.diagnosticsNeeded} alumno(s) requieren diagnóstico.</p>`:''}</section>`).join(''):'';
+  const diagnostics=data.diagnosticsNeeded?`<div class="next-lesson-box status-warn"><small>Diagnóstico pendiente</small><strong>${data.diagnosticsNeeded} alumno(s) todavía no tienen suficiente colocación.</strong></div>`:'';
+  $('#program-plan').innerHTML=`<div class="profile-stats"><article><strong>${data.rosterCount}</strong><span>Roster</span></article><article><strong>${data.nextSession?.weekNo??'—'}</strong><span>Próxima semana</span></article><article><strong>${data.differentiated?'Sí':'No'}</strong><span>Diferenciar</span></article></div>${diagnostics}<h3>Propuesta para el grupo</h3>${general}${tiers?`<h3>Diferenciación por track</h3>${tiers}`:''}`;
+  if(!$('#program-dialog').open)$('#program-dialog').showModal();
+}
+async function assignGroupPlan(button){
+  if(!activeProgramId)return;const lessonId=button.dataset.lessonId;if(!lessonId)return;
+  await api(`../api/admin/programs/${encodeURIComponent(activeProgramId)}/lesson-plan`,{method:'POST',body:JSON.stringify({lessonId,cohortTier:button.dataset.tier||null,deliveryStage:'theory_only'})});
+  await openProgramPlan(activeProgramId);await load();
 }
 
 async function savePlacement(){const bandCode=$('#placement-select')?.value;if(!activeStudentId||!bandCode)return;await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/placement`,{method:'PUT',body:JSON.stringify({bandCode,source:'manual',confidence:80})});await openStudent(activeStudentId);}
@@ -95,6 +117,8 @@ async function saveSkill(button){const row=button.closest('.skill-priority');if(
 async function saveNextDecision(payload){if(!activeStudentId)return;await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/next-lesson-decision`,{method:'POST',body:JSON.stringify({...payload,locale:'es'})});await openStudent(activeStudentId);}
 
 document.addEventListener('click',async event=>{
+  const openGroup=event.target.closest('.open-group-plan');if(openGroup){const card=openGroup.closest('.program-card');try{await openProgramPlan(card.dataset.programId);}catch(e){$('#error').textContent=e.message;}return;}
+  const assignGroup=event.target.closest('.assign-group-plan');if(assignGroup){try{await assignGroupPlan(assignGroup);}catch(e){$('#error').textContent=e.message;}return;}
   const acceptPlan=event.target.closest('.accept-next-plan');if(acceptPlan){try{await saveNextDecision({decision:'accepted'});}catch(e){$('#error').textContent=e.message;}return;}
   const assignPlan=event.target.closest('.assign-next-plan');if(assignPlan){try{await saveNextDecision({decision:'accepted',assignToNextPrivateSession:true});}catch(e){$('#error').textContent=e.message;}return;}
   const dismissPlan=event.target.closest('.dismiss-next-plan');if(dismissPlan){try{await saveNextDecision({decision:'dismissed'});}catch(e){$('#error').textContent=e.message;}return;}
