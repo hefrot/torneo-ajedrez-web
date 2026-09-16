@@ -32,9 +32,10 @@ function hydrateAttendance(card,session){
 }
 function sessionCard(s){
   const lessons=s.lessons.length?s.lessons.map(l=>esc(l.title)).join(' · '):'Sin lección asignada todavía';
+  const language={en:'Inglés',es:'Español',bilingual:'Bilingüe'}[s.instruction_locale||'en']||s.instruction_locale;
   return `<article class="panel coach-card session-card" data-session-id="${esc(s.id)}">
     <div class="coach-card-head"><div><strong>${esc(s.school_name||s.program_name)}</strong><div class="row-meta">${esc(s.starts_at)} · Semana ${s.week_no||'-'}/${s.planned_weeks||'-'} · ${s.roster.length} alumnos</div></div><span class="status-badge">${esc(s.program_type)}</span></div>
-    <div class="coach-sub">${lessons}</div>
+    <div class="coach-sub">${lessons} · Idioma: ${esc(language)}</div>
     <div class="coach-actions"><button class="btn btn-primary toggle-attendance" type="button">Tomar asistencia</button></div>
     <div class="attendance-editor" hidden>${s.roster.map(st=>attendanceRow(s.id,st)).join('')}<div class="attendance-save"><button class="btn btn-primary save-attendance" type="button">Guardar asistencia</button><span class="save-state"></span></div></div>
   </article>`;
@@ -72,15 +73,16 @@ async function load(){
   $('#summary').innerHTML=[['Alumnos activos',d.totals.activeStudents],['Programas activos',d.totals.activePrograms],['Clases hoy',d.totals.todaySessions],['Alertas',d.totals.alerts]].map(([l,v])=>`<article class="stat"><div class="stat-value">${v}</div><div class="stat-label">${l}</div></article>`).join('');
   $('#sessions').innerHTML=d.todaySessions.length?d.todaySessions.map(sessionCard).join(''):'<div class="empty">No hay clases cargadas para hoy.</div>';
   d.todaySessions.forEach(s=>{const card=document.querySelector(`[data-session-id="${CSS.escape(s.id)}"]`);if(card)hydrateAttendance(card,s);});
-  $('#upcoming').innerHTML=d.upcomingSessions.length?d.upcomingSessions.map(s=>`<article class="panel coach-card"><div><strong>${esc(s.school_name||s.program_name)}</strong><div class="row-meta">${esc(s.starts_at)} · ${esc(s.program_name)} · ${s.roster_count} alumno${s.roster_count===1?'':'s'}</div></div><span class="status-badge">${esc(s.program_type)}</span></article>`).join(''):'<div class="empty">Sin clases en los próximos 7 días.</div>';
+  $('#upcoming').innerHTML=d.upcomingSessions.length?d.upcomingSessions.map(s=>`<article class="panel coach-card"><div><strong>${esc(s.school_name||s.program_name)}</strong><div class="row-meta">${esc(s.starts_at)} · ${esc(s.program_name)} · ${s.roster_count} alumno${s.roster_count===1?'':'s'} · ${esc(({en:'Inglés',es:'Español',bilingual:'Bilingüe'}[s.instruction_locale||'en']))}</div></div><span class="status-badge">${esc(s.program_type)}</span></article>`).join(''):'<div class="empty">Sin clases en los próximos 7 días.</div>';
   $('#alerts').innerHTML=d.alerts.length?d.alerts.map(a=>`<article class="panel coach-card"><strong>${a.priority==='high'?'⚠️':'ℹ️'} ${esc(a.message)}</strong>${a.studentId?`<button class="student-link" data-open-student="${esc(a.studentId)}" type="button">Abrir alumno</button>`:''}</article>`).join(''):'<div class="empty">Sin alertas pedagógicas.</div>';
-  $('#programs').innerHTML=d.programs.length?d.programs.map(p=>`<article class="panel coach-card"><div><strong>${esc(p.school_name||p.name)}</strong><div class="row-meta">${esc(p.name)} · ${p.active_students} alumnos · Semana ${p.completed_week||0}/${p.planned_weeks||'-'}</div></div><span class="status-badge status-ok">${esc(p.status)}</span></article>`).join(''):'<div class="empty">Sin programas activos.</div>';
+  $('#programs').innerHTML=d.programs.length?d.programs.map(p=>`<article class="panel coach-card program-card" data-program-id="${esc(p.id)}"><div><strong>${esc(p.school_name||p.name)}</strong><div class="row-meta">${esc(p.name)} · ${p.active_students} alumnos · Semana ${p.completed_week||0}/${p.planned_weeks||'-'}</div></div><div class="inline-editor"><select class="field program-language"><option value="en"${p.instruction_locale==='en'?' selected':''}>Inglés</option><option value="es"${p.instruction_locale==='es'?' selected':''}>Español</option><option value="bilingual"${p.instruction_locale==='bilingual'?' selected':''}>Bilingüe</option></select><button class="btn btn-secondary save-program-language" type="button">Guardar idioma</button></div></article>`).join(''):'<div class="empty">Sin programas activos.</div>';
 }
 
 async function savePlacement(){const bandCode=$('#placement-select')?.value;if(!activeStudentId||!bandCode)return;await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/placement`,{method:'PUT',body:JSON.stringify({bandCode,source:'manual',confidence:80})});await openStudent(activeStudentId);}
 async function saveSkill(button){const row=button.closest('.skill-priority');if(!row||!activeStudentId)return;const status=row.querySelector('.skill-status').value;await api(`../api/admin/students/${encodeURIComponent(activeStudentId)}/hmena-skills/${encodeURIComponent(row.dataset.skillCode)}`,{method:'PUT',body:JSON.stringify({status,evidence:{via:'coach_portal'}})});await openStudent(activeStudentId);}
 
 document.addEventListener('click',async event=>{
+  const langSave=event.target.closest('.save-program-language');if(langSave){const card=langSave.closest('.program-card');try{await api(`../api/admin/programs/${encodeURIComponent(card.dataset.programId)}/language`,{method:'PUT',body:JSON.stringify({instructionLocale:card.querySelector('.program-language').value})});await load();}catch(e){$('#error').textContent=e.message;}return;}
   if(event.target.closest('#save-placement')){try{await savePlacement();}catch(e){$('#error').textContent=e.message;}return;}
   const skillSave=event.target.closest('.save-skill');if(skillSave){try{await saveSkill(skillSave);}catch(e){$('#error').textContent=e.message;}return;}
   const toggle=event.target.closest('.toggle-attendance');

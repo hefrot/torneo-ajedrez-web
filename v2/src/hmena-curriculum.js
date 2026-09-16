@@ -211,14 +211,14 @@ export function recommendLearningPriorities(db,studentId,{limit=5}={}){
   const priorities=[];
   for(const s of skills){
     const prereqs=prereqStmt.all(studentId,s.id);const prereqsReady=prereqs.every(p=>['drill_mastered','applied_in_game'].includes(p.status));
-    let score=0,reason='';
-    if(s.status==='regressed'){score=100;reason='Regresión detectada: requiere reevaluación.';}
-    else if(s.status==='practicing'){score=90;reason='Está en práctica y aún no está dominada.';}
-    else if(s.status==='introduced'){score=80;reason='Ya fue introducida, pero falta evidencia de dominio.';}
-    else if(s.status==='drill_mastered'){score=55;reason='Resuelve ejercicios; falta aplicarla consistentemente en partidas.';}
-    else if(s.status==='unseen'&&(prereqs.length===0||prereqsReady)){score=70;reason='Siguiente skill nueva con prerrequisitos listos.';}
-    else if(s.status==='unseen'&&!prereqsReady){score=40;reason='Hay un hueco de prerrequisitos; conviene reforzar fundamentos antes de avanzar.';}
-    if(score)priorities.push({...s,score,reason,prerequisitesReady:prereqsReady,prerequisiteCount:prereqs.length});
+    let score=0,reason='',reasonCode='';
+    if(s.status==='regressed'){score=100;reasonCode='regressed';reason='Regresión detectada: requiere reevaluación.';}
+    else if(s.status==='practicing'){score=90;reasonCode='practicing';reason='Está en práctica y aún no está dominada.';}
+    else if(s.status==='introduced'){score=80;reasonCode='introduced';reason='Ya fue introducida, pero falta evidencia de dominio.';}
+    else if(s.status==='drill_mastered'){score=55;reasonCode='drill_mastered';reason='Resuelve ejercicios; falta aplicarla consistentemente en partidas.';}
+    else if(s.status==='unseen'&&(prereqs.length===0||prereqsReady)){score=70;reasonCode='unseen_ready';reason='Siguiente skill nueva con prerrequisitos listos.';}
+    else if(s.status==='unseen'&&!prereqsReady){score=40;reasonCode='missing_prereqs';reason='Hay un hueco de prerrequisitos; conviene reforzar fundamentos antes de avanzar.';}
+    if(score)priorities.push({...s,score,reason,reasonCode,prerequisitesReady:prereqsReady,prerequisiteCount:prereqs.length});
   }
   priorities.sort((a,b)=>b.score-a.score||a.sequenceNo-b.sequenceNo);
   return {placement,needsAssessment:false,priorities:priorities.slice(0,Math.max(1,Math.min(10,Number(limit)||5)))};

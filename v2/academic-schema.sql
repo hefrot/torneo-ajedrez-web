@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS students (
   school_grade TEXT,
   current_level INTEGER,
   target_level INTEGER,
+  preferred_locale TEXT CHECK(preferred_locale IN ('en','es')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS programs (
   start_date TEXT,
   end_date TEXT,
   planned_weeks INTEGER,
+  instruction_locale TEXT NOT NULL DEFAULT 'en' CHECK(instruction_locale IN ('en','es','bilingual')),
   status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned','active','completed','cancelled')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -70,6 +72,7 @@ CREATE TABLE IF NOT EXISTS class_sessions (
   duration_minutes INTEGER NOT NULL DEFAULT 60,
   week_no INTEGER,
   title TEXT,
+  instruction_locale TEXT CHECK(instruction_locale IN ('en','es','bilingual')),
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','completed','cancelled','no_show')),
   coach_note TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -251,11 +254,26 @@ CREATE INDEX IF NOT EXISTS idx_assignments_skill ON assignments(skill_id);
 
 
 
+
+CREATE TABLE IF NOT EXISTS curriculum_localizations (
+  entity_type TEXT NOT NULL CHECK(entity_type IN ('framework','track','skill','lesson')),
+  entity_id TEXT NOT NULL,
+  locale TEXT NOT NULL CHECK(locale IN ('en','es')),
+  title TEXT,
+  objective TEXT,
+  description TEXT,
+  content_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(entity_type,entity_id,locale)
+);
+CREATE INDEX IF NOT EXISTS idx_curriculum_localizations_locale ON curriculum_localizations(locale,entity_type,entity_id);
+
 CREATE TABLE IF NOT EXISTS portal_accounts (
   id TEXT PRIMARY KEY,
   login_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
   display_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK(role IN ('guardian','student')),
+  preferred_locale TEXT NOT NULL DEFAULT 'en' CHECK(preferred_locale IN ('en','es')),
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','revoked')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

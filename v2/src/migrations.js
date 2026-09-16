@@ -69,6 +69,25 @@ const migrations=[
       CREATE INDEX IF NOT EXISTS idx_external_ratings_player_time ON external_rating_snapshots(player_id,rating_type,captured_at);`);
     }
   }
+,
+  {
+    id:'academic-i18n-v4',
+    run(db){
+      if(!hasColumn(db,'students','preferred_locale')) db.exec("ALTER TABLE students ADD COLUMN preferred_locale TEXT CHECK(preferred_locale IN ('en','es'))");
+      if(!hasColumn(db,'programs','instruction_locale')) db.exec("ALTER TABLE programs ADD COLUMN instruction_locale TEXT NOT NULL DEFAULT 'en' CHECK(instruction_locale IN ('en','es','bilingual'))");
+      if(!hasColumn(db,'class_sessions','instruction_locale')) db.exec("ALTER TABLE class_sessions ADD COLUMN instruction_locale TEXT CHECK(instruction_locale IN ('en','es','bilingual'))");
+      if(!hasColumn(db,'portal_accounts','preferred_locale')) db.exec("ALTER TABLE portal_accounts ADD COLUMN preferred_locale TEXT NOT NULL DEFAULT 'en' CHECK(preferred_locale IN ('en','es'))");
+      db.exec(`CREATE TABLE IF NOT EXISTS curriculum_localizations (
+        entity_type TEXT NOT NULL CHECK(entity_type IN ('framework','track','skill','lesson')),
+        entity_id TEXT NOT NULL,
+        locale TEXT NOT NULL CHECK(locale IN ('en','es')),
+        title TEXT,objective TEXT,description TEXT,content_json TEXT NOT NULL DEFAULT '{}',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY(entity_type,entity_id,locale)
+      );
+      CREATE INDEX IF NOT EXISTS idx_curriculum_localizations_locale ON curriculum_localizations(locale,entity_type,entity_id);`);
+    }
+  }
 ];
 export function runMigrations(db){
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (

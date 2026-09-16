@@ -19,11 +19,12 @@ import {reportOfficialGame,recordChallenge,validateReportedGame,disputeSubmissio
 import {GameValidationError} from './game-validation.js';
 import {LichessClient} from './providers/lichess.js';
 import {ChessComClient} from './providers/chesscom.js';
-import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent,saveSessionAttendance,studentProfile,addCoachNote} from './academic.js';
+import {createStudent,listStudents,createSchool,listSchools,createProgram,listPrograms,enrollStudent,saveSessionAttendance,studentProfile,addCoachNote,setProgramInstructionLocale} from './academic.js';
 import {coachDashboard} from './coach-dashboard.js';
 import {listCurriculum,assignLessonToSession,recommendNextLegacyLesson} from './curriculum.js';
-import {hmenaOverview,getHmenaPlacement,placeStudentInHmena,recommendLearningPriorities,setHmenaSkillStatus} from './hmena-curriculum.js';
-import {createPortalAccount,loginPortalAccount,authenticatePortalSession,regeneratePortalCode} from './student-portal-access.js';
+import {getHmenaPlacement,placeStudentInHmena,recommendLearningPriorities,setHmenaSkillStatus} from './hmena-curriculum.js';
+import {localizedHmenaOverview,localizedLearningPriorities} from './curriculum-localization.js';
+import {createPortalAccount,loginPortalAccount,authenticatePortalSession,regeneratePortalCode,setPortalPreferredLocale} from './student-portal-access.js';
 import {studentPortalDashboard} from './student-portal.js';
 import {studentRatingProgress} from './rating-tracking.js';
 import {linkStudentVerifiedAccount} from './student-platform-link.js';
@@ -56,6 +57,7 @@ app.post('/api/portal/login',(req,res)=>{
   res.json(result);
 });
 app.get('/api/portal/me',portalOnly,(req,res)=>{const data=studentPortalDashboard(db,req.portalAuth.accountId);if(!data)return res.status(404).json({error:'portal account not found'});res.json(data);});
+app.patch('/api/portal/preferences',portalOnly,(req,res)=>{try{res.json(setPortalPreferredLocale(db,req.portalAuth.accountId,req.body?.preferredLocale));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/config',(_q,res)=>{
   const control=getSeasonControl(db);
   const rules=leagueRuleMap(db);res.json({seasonName:process.env.SEASON_NAME||'HMENA Chess League 2026',gamesPerOpponent:rules.games_per_opponent,scoring:rules.scoring,minActivityHours:24,playAhead:true,automatic24hForfeit:false,registrationRequiresVerifiedPlatformAccount:true,ownershipPolicy:rules.ownership_requirement,registrationOpen:control.registration_state==='OPEN',registrationState:control.registration_state,seasonStatus:control.season_status});
@@ -108,18 +110,18 @@ app.post('/api/admin/players/:id/accounts/verify',adminOnly,async(req,res,next)=
 });
 app.get('/api/admin/coach/dashboard',adminOnly,(req,res)=>{try{res.json(coachDashboard(db));}catch(error){res.status(500).json({error:'coach dashboard unavailable'});}});
 app.get('/api/admin/curriculum',adminOnly,(_q,res)=>res.json(listCurriculum(db)));
-app.get('/api/admin/curriculum/hmena',adminOnly,(_q,res)=>res.json(hmenaOverview(db)));
+app.get('/api/admin/curriculum/hmena',adminOnly,(req,res)=>res.json(localizedHmenaOverview(db,req.query?.locale||'en')));
 app.get('/api/admin/students/:id/next-lesson',adminOnly,(req,res)=>{
   const placement=getHmenaPlacement(db,req.params.id);
   const trackCode=({'hmena-0-400':'seeds','hmena-400-800':'builders','hmena-800-1200':'thinkers'})[placement?.bandCode]||null;
   const lesson=trackCode?recommendNextLegacyLesson(db,req.params.id,trackCode):null;
   res.json({lesson,trackCode,placement,source:lesson?'legacy_sequence':null});
 });
-app.get('/api/admin/students/:id/learning-priorities',adminOnly,(req,res)=>res.json(recommendLearningPriorities(db,req.params.id,{limit:req.query?.limit||5})));
+app.get('/api/admin/students/:id/learning-priorities',adminOnly,(req,res)=>res.json(req.query?.locale?localizedLearningPriorities(db,req.params.id,{limit:req.query?.limit||5,locale:req.query.locale}):recommendLearningPriorities(db,req.params.id,{limit:req.query?.limit||5})));
 app.put('/api/admin/students/:id/placement',adminOnly,(req,res)=>{try{res.json(placeStudentInHmena(db,{studentId:req.params.id,bandCode:req.body?.bandCode,source:req.body?.source||'manual',confidence:req.body?.confidence??80,note:req.body?.note||null}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/students/:id/hmena-skills/:code',adminOnly,(req,res)=>{try{res.json(setHmenaSkillStatus(db,{studentId:req.params.id,skillCode:req.params.code,status:req.body?.status,confidence:req.body?.confidence??null,evidence:req.body?.evidence||{}}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/sessions/:id/lessons',adminOnly,(req,res)=>{try{res.status(201).json(assignLessonToSession(db,{sessionId:req.params.id,lessonId:req.body?.lessonId,deliveryStage:req.body?.deliveryStage||'theory_only'}));}catch(error){res.status(400).json({error:error.message});}});
-app.post('/api/admin/students/:id/portal-access',adminOnly,(req,res)=>{try{const student=db.prepare('SELECT display_name AS displayName FROM students WHERE id=?').get(req.params.id);if(!student)return res.status(404).json({error:'student not found'});const role=req.body?.role||'guardian';const displayName=req.body?.displayName||`${role==='guardian'?'Familia de ':''}${student.displayName}`;res.status(201).json(createPortalAccount(db,{studentIds:[req.params.id],role,displayName,loginName:req.body?.loginName||null}));}catch(error){res.status(400).json({error:error.message});}});
+app.post('/api/admin/students/:id/portal-access',adminOnly,(req,res)=>{try{const student=db.prepare('SELECT display_name AS displayName FROM students WHERE id=?').get(req.params.id);if(!student)return res.status(404).json({error:'student not found'});const role=req.body?.role||'guardian';const displayName=req.body?.displayName||`${role==='guardian'?'Familia de ':''}${student.displayName}`;res.status(201).json(createPortalAccount(db,{studentIds:[req.params.id],role,displayName,loginName:req.body?.loginName||null,preferredLocale:req.body?.preferredLocale||'en'}));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/portal/accounts/:id/regenerate-code',adminOnly,(req,res)=>{try{res.json(regeneratePortalCode(db,req.params.id));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/students/:id/platform-accounts/verify',adminOnly,async(req,res,next)=>{try{const platform=cleanPlatform(req.body?.platform),username=String(req.body?.username||'').trim();if(!platform||!username)return res.status(400).json({error:'platform and username are required'});const verification=await verifyPlatformAccount(platform,username);const linked=linkStudentVerifiedAccount(db,req.params.id,verification);recordProfileVerification(db,linked.playerId,verification);res.status(201).json(linked);}catch(error){if(error instanceof AccountNotFoundError)return res.status(422).json({error:error.message,code:error.code});if(error instanceof AccountVerificationUnavailableError)return res.status(503).json({error:error.message,code:error.code});if(error instanceof RegistrationConflictError)return res.status(409).json({error:'esa cuenta ya está vinculada a otra identidad',code:error.code});next(error);}});
 app.get('/api/admin/students/:id/rating-progress',adminOnly,(req,res)=>{const data=studentRatingProgress(db,req.params.id);if(!data)return res.status(404).json({error:'student not found'});res.json(data);});
@@ -129,6 +131,7 @@ app.get('/api/admin/schools',adminOnly,(_q,res)=>res.json(listSchools(db)));
 app.post('/api/admin/schools',adminOnly,(req,res)=>{try{res.status(201).json(createSchool(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/programs',adminOnly,(_q,res)=>res.json(listPrograms(db)));
 app.post('/api/admin/programs',adminOnly,(req,res)=>{try{res.status(201).json(createProgram(db,req.body));}catch(error){res.status(400).json({error:error.message});}});
+app.put('/api/admin/programs/:id/language',adminOnly,(req,res)=>{try{res.json(setProgramInstructionLocale(db,req.params.id,req.body?.instructionLocale));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/programs/:id/enrollments',adminOnly,(req,res)=>{try{res.status(201).json(enrollStudent(db,{programId:req.params.id,studentId:req.body?.studentId,initialLevel:req.body?.initialLevel??null}));}catch(error){res.status(400).json({error:error.message});}});
 app.put('/api/admin/sessions/:id/attendance',adminOnly,(req,res)=>{try{res.json(saveSessionAttendance(db,req.params.id,req.body?.records));}catch(error){res.status(400).json({error:error.message});}});
 app.get('/api/admin/students/:id/profile',adminOnly,(req,res)=>{const profile=studentProfile(db,req.params.id);if(!profile)return res.status(404).json({error:'student not found'});res.json(profile);});
